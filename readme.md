@@ -24,8 +24,3 @@ pip install -r requirements.txt
 ```bash
 python main.py --edges <your edges data path> --od <your OD data path> --pos <your data that describe the position of network node> --max_iter <maximum iteration> --tol <tolerance of update step>
 ```
-
-### 3.作者
-- Ica_l
-- 邮箱地址 : [desprado233@163.com](desprado233@163.com)
-- Github : [HKP-791](https://github.com/HKP-791)
