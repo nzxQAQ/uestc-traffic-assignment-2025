@@ -1,38 +1,37 @@
+import json
 import numpy as np
-import pandas as pd
 import networkx as nx
 import time
-import random
 from collections import defaultdict
 from tqdm import *
 import argparse
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 
 from algorithm.optimal_minimized import find_optimal_alpha
 from algorithm.dijkstra_shortest import dijkstra
 
-import json
-
 def build_network_from_json(network_file, demand_file):
     # 读取 network.json
     with open(network_file, 'r', encoding='utf-8') as f:
-        net = json.load(f)
+        network = json.load(f)
     
     # 读取 demand.json
     with open(demand_file, 'r', encoding='utf-8') as f:
-        dem = json.load(f)
+        demand = json.load(f)
 
     # 构建节点坐标字典（用于后续可视化）
-    node_names = net['nodes']['name']
-    xs = net['nodes']['x']
-    ys = net['nodes']['y']
+    node_names = network['nodes']['name']
+    xs = network['nodes']['x']
+    ys = network['nodes']['y']
     pos_dict = {name: (x, y) for name, x, y in zip(node_names, xs, ys)}
 
     # 构建有向图 G
     G = nx.DiGraph()
 
     # 添加路段（links）
-    links = net['links']
+    links = network['links']
     for i, link_str in enumerate(links['between']):
         u = link_str[0]  # 起点
         v = link_str[1]  # 终点
@@ -51,10 +50,9 @@ def build_network_from_json(network_file, demand_file):
         G.add_edge(u, v, t0=t0, C=capacity)
         G.add_edge(v, u, t0=t0, C=capacity)
 
-
     # 构建 OD 需求字典
     od_pairs = {}
-    for o, d, q in zip(dem['from'], dem['to'], dem['amount']):
+    for o, d, q in zip(demand['from'], demand['to'], demand['amount']):
         od_pairs[(o, d)] = q
 
     # 初始化流量 Q
@@ -63,16 +61,16 @@ def build_network_from_json(network_file, demand_file):
 
     return G, od_pairs, pos_dict
 
-def all_or_nothing_assignment(G, od_groups):
+def all_or_nothing_assignment(G, od_pairs):
     """
     全有全无分配：根据当前图 G 的阻抗（边属性 't'），将 OD 流量加载到最短路径。
     
     参数:
         G: networkx.DiGraph，边需包含 't' 属性（旅行时间）
-        od_groups: dict，格式 {origin: [(dest, flow), ...]}
+        od_pairs: dict，格式 {origin: [(dest, flow), ...]}
     
     返回:
-        y: np.ndarray，长度 = len(G.edges())，顺序与 list(G.edges()) 严格一致
+        y: np.ndarray，边流量向量
     """
     # 获取边列表并建立索引映射（顺序固定）
     edges = list(G.edges())
@@ -82,10 +80,10 @@ def all_or_nothing_assignment(G, od_groups):
     y = np.zeros(len(edges))
     
     # 对每个起点 o 计算最短路径树
-    for o in od_groups:
+    for o in od_pairs:
         try:
             paths = dijkstra(G, o, weight='t')  # 假设 dijkstra 支持 weight 参数
-            for d, q in od_groups[o]:
+            for d, q in od_pairs[o]:
                 if d in paths:
                     path = paths[d]
                     # 遍历路径上的每一段边
@@ -100,7 +98,17 @@ def all_or_nothing_assignment(G, od_groups):
 
 
 def FW_allocation(G, od_pairs, max_iter, tol):
-
+    """
+    Ford-Warshall 分配算法：根据当前图 G 的阻抗（边属性 't'），将 OD 流量加载到最短路径。
+    
+    参数:
+        G: networkx.DiGraph，边需包含 't' 属性（旅行时间）
+        od_pairs: dict，格式 {origin: [(dest, flow), ...]}
+        max_iter: int，最大迭代次数
+        tol: float，收敛阈值
+    返回:
+        G: networkx.DiGraph，边属性 'Q' 更新为分配后的流量
+    """
     # 预处理边列表和属性数组
     edges = list(G.edges())
     t0_arr = np.array([G[u][v]['t0'] for u, v in edges])
@@ -145,11 +153,14 @@ def FW_allocation(G, od_pairs, max_iter, tol):
 
     return G
 
-def visulize_network(G, pos_dict):
-    import matplotlib.pyplot as plt
-    import matplotlib.cm as cm
-    import matplotlib.colors as mcolors
 
+def visulize_network(G, pos_dict):
+    """
+    可视化网络：绘制网络图，并显示每条边的流量。
+    参数：
+        G: networkx.DiGraph，边需包含 'Q' 属性（流量）
+        pos_dict: dict，节点坐标字典
+    """
     plt.figure(figsize=(10, 8))
     
     edges = list(G.edges())
@@ -176,9 +187,8 @@ def visulize_network(G, pos_dict):
         widths.append(width)
 
     # === 颜色映射：根据流量大小使用连续 colormap（如 plasma, viridis, 或 RdBu）===
-    # 这里我们使用 'plasma'（紫→红→黄），也可换为 'viridis', 'coolwarm' 等
     norm = mcolors.Normalize(vmin=min_flow, vmax=max_flow)
-    cmap = cm.plasma  # 或 cm.viridis, cm.coolwarm, cm.Reds 等
+    cmap = cm.viridis  
 
     edge_colors = [cmap(norm(flow)) for flow in flows]
 
@@ -261,7 +271,7 @@ if __name__ == '__main__':
     parser.add_argument('--network', type=str, default='data/network.json', help='Path to network.json')
     parser.add_argument('--demand', type=str, default='data/demand.json', help='Path to demand.json')
     parser.add_argument('--max_iter', type=int, default=200)  # 迭代次数max_iter越大，精度越高
-    parser.add_argument('--tol', type=float, default=1e-6)   # 迭代终止条件tol越小，精度越高
+    parser.add_argument('--tol', type=float, default=1e-9)   # 迭代终止条件tol越小，精度越高
     args = parser.parse_args()
 
     # 构建网络
