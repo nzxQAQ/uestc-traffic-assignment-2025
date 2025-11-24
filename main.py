@@ -49,26 +49,25 @@ def build_network_from_json(network_file, demand_file):
         # 添加边到图中（路网是双向的）
         G.add_edge(u, v, t0=t0, C=capacity)
         G.add_edge(v, u, t0=t0, C=capacity)
-
-    # 构建 OD 需求字典
-    od_pairs = {}
+    
+    # 构建 od_demand: {origin: {dest: flow}}
+    od_demand = {}
     for o, d, q in zip(demand['from'], demand['to'], demand['amount']):
-        od_pairs[(o, d)] = q
+        if o not in od_demand:
+            od_demand[o] = {}
+        od_demand[o][d] = od_demand[o].get(d, 0) + q  # 支持重复 OD 合并
 
     # 初始化流量 Q
     for u, v in G.edges():
         G[u][v]['Q'] = 0.0
 
-    return G, od_pairs, pos_dict
+    return G, od_demand, pos_dict
 
-def All_or_Nothing_Allocation(G, od_pairs):
+def All_or_Nothing_Allocation(G, od_demand):
 
     # 预处理边列表和属性数组
     edges = list(G.edges())
     edge_to_idx = {edge: i for i, edge in enumerate(edges)}
-    od_groups = defaultdict(list)
-    for (o, d), q in od_pairs.items():
-        od_groups[o].append((d, q))
     
     # 初始化流量向量
     y = np.zeros(len(edges))
@@ -80,10 +79,10 @@ def All_or_Nothing_Allocation(G, od_pairs):
         G[u][v]['t'] = G[u][v]['t0'] * (1 + Q / C)**2 
     
     # 对每个起点 o 计算最短路径树
-    for o in od_groups:
+    for o in od_demand:
         try:
             paths = dijkstra(G, o, weight='t')  # 假设 dijkstra 支持 weight 参数
-            for d, q in od_groups[o]:
+            for d, q in od_demand[o].items():
                 if d in paths:
                     path = paths[d]
                     # 遍历路径上的每一段边
@@ -100,13 +99,13 @@ def All_or_Nothing_Allocation(G, od_pairs):
 
     return G     
 
-def all_or_nothing_assignment(G, od_groups):
+def all_or_nothing_assignment(G, od_demand):
     """
     全有全无分配：根据当前图 G 的阻抗（边属性 't'），将 OD 流量加载到最短路径。
     
     参数:
         G: networkx.DiGraph，边需包含 't' 属性（旅行时间）
-        od_groups: dict，格式 {origin: [(dest, flow), ...]}
+        od_demand: dict，格式 {origin: {dest: flow}}
     
     返回:
         y: np.ndarray，边流量向量
@@ -119,10 +118,10 @@ def all_or_nothing_assignment(G, od_groups):
     y = np.zeros(len(edges))
     
     # 对每个起点 o 计算最短路径树
-    for o in od_groups:
+    for o in od_demand:
         try:
             paths = dijkstra(G, o, weight='t')  # 假设 dijkstra 支持 weight 参数
-            for d, q in od_groups[o]:
+            for d, q in od_demand[o].items():
                 if d in paths:
                     path = paths[d]
                     # 遍历路径上的每一段边
@@ -136,13 +135,13 @@ def all_or_nothing_assignment(G, od_groups):
     return y
 
 
-def FW_Allocation(G, od_pairs, max_iter, tol):
+def FW_Allocation(G, od_demand, max_iter, tol):
     """
     Ford-Warshall 分配算法：根据当前图 G 的阻抗（边属性 't'），将 OD 流量加载到最短路径。
     
     参数:
         G: networkx.DiGraph，边需包含 't' 属性（旅行时间）
-        od_pairs: dict，格式 {origin: [(dest, flow), ...]}
+        od_demand: dict，格式 {origin: {dest: flow}}
         max_iter: int，最大迭代次数
         tol: float，收敛阈值
     返回:
@@ -152,9 +151,6 @@ def FW_Allocation(G, od_pairs, max_iter, tol):
     edges = list(G.edges())
     t0_arr = np.array([G[u][v]['t0'] for u, v in edges])
     C_arr = np.array([G[u][v]['C'] for u, v in edges])
-    od_groups = defaultdict(list)
-    for (o, d), q in od_pairs.items():
-        od_groups[o].append((d, q))
 
     # 计算当前阻抗
     for iter in tqdm(range(max_iter)):
@@ -165,7 +161,7 @@ def FW_Allocation(G, od_pairs, max_iter, tol):
             # 行程时间函数
             G[u][v]['t'] = G[u][v]['t0'] * (1 + Q / C)**2 
 
-        y = all_or_nothing_assignment(G, od_groups)
+        y = all_or_nothing_assignment(G, od_demand)
 
         # 计算当前流量数组和方向向量
         Q_current = np.array([G[u][v]['Q'] for u, v in edges])
@@ -314,13 +310,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # 构建网络
-    G, od_pairs, pos_dict = build_network_from_json(args.network, args.demand)
+    G, od_demand, pos_dict = build_network_from_json(args.network, args.demand)
 
-    G_All_or_Nothing_assigned = All_or_Nothing_Allocation(G, od_pairs)
+    # 执行 AON 分配
+    G_AON = All_or_Nothing_Allocation(G, od_demand)
     print("All or Nothing Assignment completed.")
-    visulize_network(G_All_or_Nothing_assigned, pos_dict)
+    visulize_network(G_AON, pos_dict)
 
     # 执行 FW 分配
-    G_FW_assigned = FW_Allocation(G, od_pairs, args.max_iter, args.tol)
+    G_FW = FW_Allocation(G, od_demand, args.max_iter, args.tol)
     print("FW Allocation completed.")
-    visulize_network(G_FW_assigned, pos_dict)
+    visulize_network(G_FW, pos_dict)
