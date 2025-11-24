@@ -2,7 +2,6 @@ import json
 import numpy as np
 import networkx as nx
 import time
-from collections import defaultdict
 from tqdm import *
 import argparse
 import matplotlib.pyplot as plt
@@ -14,12 +13,12 @@ from algorithm.dijkstra_shortest import dijkstra
 
 def build_network_from_json(network_file, demand_file):
     # 读取 network.json
-    with open(network_file, 'r', encoding='utf-8') as f:
-        network = json.load(f)
+    with open(network_file, 'r', encoding='utf-8') as network_json:
+        network = json.load(network_json)
     
     # 读取 demand.json
-    with open(demand_file, 'r', encoding='utf-8') as f:
-        demand = json.load(f)
+    with open(demand_file, 'r', encoding='utf-8') as demand_json:
+        demand = json.load(demand_json)
 
     # 构建节点坐标字典（用于后续可视化）
     node_names = network['nodes']['name']
@@ -30,7 +29,7 @@ def build_network_from_json(network_file, demand_file):
     # 构建有向图 G
     G = nx.DiGraph()
 
-    # 添加路段（links）
+    # 添加路段（links）进入图G中
     links = network['links']
     for i, link_str in enumerate(links['between']):
         u = link_str[0]  # 起点
@@ -57,19 +56,26 @@ def build_network_from_json(network_file, demand_file):
             od_demand[o] = {}
         od_demand[o][d] = od_demand[o].get(d, 0) + q  # 支持重复 OD 合并
 
-    # 初始化流量 Q
+    # 初始化图中流量 Q
     for u, v in G.edges():
         G[u][v]['Q'] = 0.0
 
     return G, od_demand, pos_dict
 
 def All_or_Nothing_Allocation(G, od_demand):
-
-    # 预处理边列表和属性数组
+    """
+    全有全无分配：根据当前图 G 的阻抗（边属性 't'），将 OD 流量加载到最短路径。    
+    参数:
+        G: networkx.DiGraph，边需包含 't' 属性（旅行时间
+        od_demand: dict，格式 {origin: {dest: flow}}
+    返回:
+        G: networkx.DiGraph，边属性 'Q' 更新为分配后的流量
+    """
+    # 获取边列表并建立索引映射（顺序固定）
     edges = list(G.edges())
     edge_to_idx = {edge: i for i, edge in enumerate(edges)}
-    
-    # 初始化流量向量
+
+    # 初始化流量向量y
     y = np.zeros(len(edges))
 
     for u, v in G.edges():
@@ -114,7 +120,7 @@ def all_or_nothing_assignment(G, od_demand):
     edges = list(G.edges())
     edge_to_idx = {edge: i for i, edge in enumerate(edges)}
     
-    # 初始化流量向量
+    # 初始化流量向量y
     y = np.zeros(len(edges))
     
     # 对每个起点 o 计算最短路径树
