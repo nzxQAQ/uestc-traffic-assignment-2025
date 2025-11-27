@@ -20,7 +20,7 @@ def build_network_from_json(network_file, demand_file):
     with open(demand_file, 'r', encoding='utf-8') as demand_json:
         demand = json.load(demand_json)
 
-    # 构建节点坐标字典（用于后续可视化）
+    # 构建节点坐标字典pos_dict（用于后续可视化）
     node_names = network['nodes']['name']
     xs = network['nodes']['x']
     ys = network['nodes']['y']
@@ -29,7 +29,7 @@ def build_network_from_json(network_file, demand_file):
     # 构建有向图 G
     G = nx.DiGraph()
 
-    # 添加路段（links）进入图G中
+    # 把 network 中的 links 加入图G中，并计算自由流时间 t0
     links = network['links']
     for i, link_str in enumerate(links['between']):
         u = link_str[0]  # 起点
@@ -45,9 +45,9 @@ def build_network_from_json(network_file, demand_file):
         # 自由流时间 t0 = length / speedmax
         t0 = length / speedmax if speedmax > 0 else float('inf')
 
-        # 添加边到图中（路网是双向的）
-        G.add_edge(u, v, t0=t0, C=capacity)
-        G.add_edge(v, u, t0=t0, C=capacity)
+        # 添加路段（links）进入图G中（路网是双向的）
+        G.add_edge(u, v, C=capacity, Vmax=speedmax, t0=t0)
+        G.add_edge(v, u, C=capacity, Vmax=speedmax, t0=t0)
     
     # 构建 od_demand: {origin: {dest: flow}}
     od_demand = {}
@@ -143,7 +143,7 @@ def all_or_nothing_assignment(G, od_demand):
 
 def FW_Allocation(G, od_demand, max_iter, tol):
     """
-    Ford-Warshall 分配算法：根据当前图 G 的阻抗（边属性 't'），将 OD 流量加载到最短路径。
+    Frank-Wolfe 分配算法：根据当前图 G 的阻抗（边属性 't'），将 OD 流量加载到最短路径。
     
     参数:
         G: networkx.DiGraph，边需包含 't' 属性（旅行时间）
@@ -173,27 +173,35 @@ def FW_Allocation(G, od_demand, max_iter, tol):
         Q_current = np.array([G[u][v]['Q'] for u, v in edges])
         d = y - Q_current
         
-        # 定义向量化目标函数
+        # === 收敛判断：使用流量变化量 ===
+        flow_change = np.linalg.norm(d, ord=1)
+        print(f"Iter {iter+1}: flow_change = {flow_change:.4f}")
+        if flow_change < tol:
+            print(f'Converged after {iter+1} iterations. Flow change: {flow_change:.2e}')
+            break
+
+        # === 寻找最优步长 alpha ===
+        # def obj(alpha):
+        #     new_Q = Q_current + alpha * d
+        #     travel_times = t0_arr * (1 + new_Q / C_arr)**2  
+        #     return np.sum(travel_times * new_Q) # 目标函数：总旅行时间
         def obj(alpha):
             new_Q = Q_current + alpha * d
-            if np.any(new_Q >= C_arr):
-                return np.inf
-            else:
-                travel_times = t0_arr * (1 + new_Q / C_arr)**2  # 行程时间函数
-                return np.sum(travel_times)
-        
-        # 优化步长
+            # 行程时间函数对应的系统总阻抗（可分离凸函数,β=2）
+            term1 = t0_arr * new_Q
+            term2 = t0_arr * (new_Q ** 3) / (3 * C_arr ** 2)
+            return np.sum(term1 + term2)
+            
         alpha = find_optimal_alpha(obj, bounds=(0, 1))
-        if alpha < tol:
-            print(f'Converged after {iter+1} iterations.')
-            break
+        # 调试信息
+        print(f"  alpha = {alpha:.6f} (expected > 0)")
+
         # 更新流量
         Q_new = Q_current + alpha * d
         for i, (u, v) in enumerate(edges):
             G[u][v]['Q'] = Q_new[i]
 
     return G
-
 
 def visulize_network(G, pos_dict):
     """
@@ -311,17 +319,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--network', type=str, default='data/network.json', help='Path to network.json')
     parser.add_argument('--demand', type=str, default='data/demand.json', help='Path to demand.json')
-    parser.add_argument('--max_iter', type=int, default=500)  # 迭代次数max_iter越大，精度越高
-    parser.add_argument('--tol', type=float, default=1e-6)   # 迭代终止条件tol越小，精度越高
+    parser.add_argument('--max_iter', type=int, default=1000)  # 迭代次数max_iter越大，精度越高
+    parser.add_argument('--tol', type=float, default=1e-2)   # 迭代终止条件tol越小，精度越高
     args = parser.parse_args()
 
     # 构建网络
     G, od_demand, pos_dict = build_network_from_json(args.network, args.demand)
 
-    # 执行 AON 分配
-    G_AON = All_or_Nothing_Allocation(G, od_demand)
-    print("All or Nothing Assignment completed.")
-    visulize_network(G_AON, pos_dict)
+    # # 执行 AON 分配
+    # G_AON = All_or_Nothing_Allocation(G, od_demand)
+    # print("All or Nothing Assignment completed.")
+    # visulize_network(G_AON, pos_dict)
 
     # 执行 FW 分配
     G_FW = FW_Allocation(G, od_demand, args.max_iter, args.tol)
