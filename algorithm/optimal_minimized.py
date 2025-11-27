@@ -27,36 +27,36 @@
 #     return (a + b) / 2
 
 # 使用 SciPy 库的 minimize_scalar 方法（未使用）
-# from scipy.optimize import minimize_scalar
+from scipy.optimize import minimize_scalar
 
-# def find_optimal_alpha(obj, bounds=(0, 1)):
-#     res = minimize_scalar(obj, bounds=bounds, method='bounded')
-#     return res.x
+def find_optimal_alpha(obj, bounds=(0, 1)):
+    res = minimize_scalar(obj, bounds=bounds, method='bounded')
+    return res.x
 
 # 黄金分割法实现
-def find_optimal_alpha(obj, bounds=(0, 1), tol=1e-2, max_iter=50):
-    a, b = bounds
-    phi = (1 + 5**0.5) / 2  # 黄金比例
-    c = b - (b - a) / phi
-    d = a + (b - a) / phi
-    fc = obj(c)
-    fd = obj(d)
+# def find_optimal_alpha(obj, bounds=(0, 1), tol=1e-2, max_iter=50):
+#     a, b = bounds
+#     phi = (1 + 5**0.5) / 2  # 黄金比例
+#     c = b - (b - a) / phi
+#     d = a + (b - a) / phi
+#     fc = obj(c)
+#     fd = obj(d)
 
-    for _ in range(max_iter):
-        if abs(b - a) < tol:
-            break
-        if fc < fd:
-            b, fd = d, fc
-            d = c
-            c = b - (b - a) / phi
-            fc = obj(c)
-        else:
-            a, fc = c, fd
-            c = d
-            d = a + (b - a) / phi
-            fd = obj(d)
+#     for _ in range(max_iter):
+#         if abs(b - a) < tol:
+#             break
+#         if fc < fd:
+#             b, fd = d, fc
+#             d = c
+#             c = b - (b - a) / phi
+#             fc = obj(c)
+#         else:
+#             a, fc = c, fd
+#             c = d
+#             d = a + (b - a) / phi
+#             fd = obj(d)
 
-    return (a + b) / 2
+#     return (a + b) / 2
 
 if __name__ == '__main__':
     # for test

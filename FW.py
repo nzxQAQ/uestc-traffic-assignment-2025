@@ -145,29 +145,6 @@ def objective_function(flow):
         
     return total
 
-# def line_search(x, y, max_iter=50):
-#     """在方向 d = y - x 上寻找最优步长 alpha ∈ [0,1]"""
-#     def phi(alpha):
-#         flow = [(1 - alpha) * x[i] + alpha * y[i] for i in range(n_links)]
-#         return objective_function(flow)
-
-#     # 使用黄金分割或简单网格搜索（这里用二分+导数近似）
-#     a, b = 0.0, 1.0
-#     phi_a = phi(a)
-#     phi_b = phi(b)
-#     for _ in range(max_iter):
-#         if b - a < 1e-6:
-#             break
-#         m1 = a + (b - a) / 3
-#         m2 = b - (b - a) / 3
-#         phi_m1 = phi(m1)
-#         phi_m2 = phi(m2)
-#         if phi_m1 < phi_m2:
-#             b = m2
-#         else:
-#             a = m1
-#     return (a + b) / 2
-
 def line_search(x, y):
     """
     在方向 d = y - x 上寻找最优步长 alpha ∈ [0, 1]
@@ -249,7 +226,7 @@ epsilon = 1e-4
 #         print(f"Iter {iteration}: Obj={obj_val:.2f}, Alpha={alpha:.4f}, DirNorm={d_norm:.2f}")
 
 for iteration in range(1, max_iter + 1):
-    # Step 1: 全有全无分配 → y
+    # === 全有全无分配 → y ===
     y = dijkstra_all_or_nothing(graph, od_demand, x)
 
     # === 计算相对间隙 ===
@@ -268,10 +245,11 @@ for iteration in range(1, max_iter + 1):
     # 【可选】防卡死：如果 alpha 极小但 gap 仍大，强制小步长
     if alpha < 1e-5 and relative_gap > 1e-3:
         alpha = 0.01
-
+        
+    # === 更新流量 ===
     x = [(1 - alpha) * x[i] + alpha * y[i] for i in range(n_links)]
 
-    # === 日志 ===
+    # === 调试日志 ===
     if iteration % 10 == 0 or alpha < 1e-4:
         obj_val = objective_function(x)
         dir_norm = sum(abs(y[i] - x[i]) for i in range(n_links))
@@ -281,131 +259,42 @@ for iteration in range(1, max_iter + 1):
 # 5. 输出结果
 # ----------------------------
 
-print("\n=== Final Link Flows ===")
+def compute_total_travel_time(flow_vector, links):
+    """
+    计算所有出行者的总行程时间。
+    参数:
+        flow_vector: list，每条 link 的流量 [q0, q1, ..., qn]
+        links: list，每条 link 的信息（含 capacity, t0）
+    返回:
+        total_tt: float，总行程时间
+    """
+    total_travel_time = 0.0
+    for i in range(len(links)):
+        q = flow_vector[i]
+        if q <= 0:
+            continue
+        # 使用 BPR 函数计算当前流量下的行程时间
+        C = links[i]['capacity']
+        t0 = links[i]['t0']
+        t = t0 * (1 + (q / C)) ** 2   # BPR: β=2
+        total_travel_time += q * t
+    return total_travel_time
+
+print("\n=== Frank-Wolfe Flows ===")
 for i, link in enumerate(links):
     if x[i] > 1e-3:  # 只显示有流量的路段
         print(f"{link['from']}->{link['to']}: flow={x[i]:.2f}, capacity={link['capacity']}, "
               f"t0={link['t0']:.2f}, t={get_link_travel_time(x, i):.2f}")
         
+TTT_fw = compute_total_travel_time(x, links)
+print(f"Total Travel Time (FW-TTT): {TTT_fw:.2f}")
+        
 # ----------------------------
-# 6. 可视化网络（新增部分）
+# 6. 可视化网络
 # ----------------------------
 
-import matplotlib.pyplot as plt
+from visualize_network import visualize_network
 import networkx as nx
-import numpy as np
-import matplotlib.colors as mcolors
-import matplotlib.cm as cm
-
-def visualize_network(G, pos_dict):
-    """
-    可视化网络：绘制网络图，并显示每条边的流量。
-    参数：
-        G: networkx.DiGraph，边需包含 'Q' 属性（流量）
-        pos_dict: dict，节点坐标字典
-    """
-    plt.figure(figsize=(10, 8))
-    
-    edges = list(G.edges())
-    flows = np.array([G[u][v]['Q'] for u, v in edges])
-    
-    if len(flows) == 0:
-        max_flow = 1
-        min_flow = 0
-    else:
-        max_flow = flows.max()
-        min_flow = flows.min()
-
-    # 使用对数缩放计算线宽
-    min_width = 0.5
-    max_width = 5.0
-    widths = []
-    for flow in flows:
-        if flow <= 0:
-            width = min_width
-        else:
-            log_flow = np.log1p(flow)
-            log_max = np.log1p(max_flow)
-            width = min_width + (max_width - min_width) * (log_flow / log_max if log_max > 0 else 0)
-        widths.append(width)
-
-    # 颜色映射
-    norm = mcolors.Normalize(vmin=min_flow, vmax=max_flow)
-    cmap = cm.viridis  
-    edge_colors = [cmap(norm(flow)) for flow in flows]
-
-    # 计算标签偏移（避免双向边标签重叠）
-    label_offsets = {}
-    for u, v in G.edges():
-        if G.has_edge(v, u):
-            x1, y1 = pos_dict[u]
-            x2, y2 = pos_dict[v]
-            dx = x2 - x1
-            dy = y2 - y1
-            length = (dx*dx + dy*dy) ** 0.5
-            if length > 0:
-                d = 1.5
-                perp_x = dy / length
-                perp_y = -dx / length
-                label_offsets[(u, v)] = (-d * perp_x, -d * perp_y)
-                label_offsets[(v, u)] = ( d * perp_x,  d * perp_y)
-            else:
-                label_offsets[(u, v)] = (-0.3, 0)
-                label_offsets[(v, u)] = (0.3, 0)
-        else:
-            label_offsets[(u, v)] = (0, 0)
-
-    ax = plt.gca()
-
-    # 绘制边
-    nx.draw_networkx_edges(
-        G, pos_dict,
-        edgelist=edges,
-        width=widths,
-        edge_color=edge_colors,
-        arrowsize=20,
-        connectionstyle='arc3,rad=0.1',
-        alpha=0.9
-    )
-
-    # 绘制流量标签
-    for i, (u, v) in enumerate(edges):
-        flow = flows[i]
-        offset = label_offsets[(u, v)]
-        
-        mid_x = (pos_dict[u][0] + pos_dict[v][0]) / 2
-        mid_y = (pos_dict[u][1] + pos_dict[v][1]) / 2
-        label_x = mid_x + offset[0]
-        label_y = mid_y + offset[1]
-        
-        ax.annotate(
-            f'{flow:.1f}',
-            xy=(label_x, label_y),
-            fontsize=9,
-            color='white',
-            ha='center',
-            va='center',
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.6),
-            zorder=5
-        )
-
-    # 节点
-    nx.draw_networkx_nodes(G, pos_dict, node_size=800, node_color='lightgray', edgecolors='black')
-    nx.draw_networkx_labels(G, pos_dict, font_size=12, font_weight='bold')
-
-    # Colorbar
-    sm = cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    cbar = plt.colorbar(sm, ax=ax, shrink=0.8, pad=0.02)
-    cbar.set_label('Traffic Flow (Q)', fontsize=12)
-
-    plt.gca().invert_yaxis()
-    plt.title('Traffic Flow Allocation\n(Line width: log-scaled flow; Color: flow magnitude)', fontsize=14)
-    plt.axis('equal')
-    plt.axis('off')
-    plt.tight_layout()
-    plt.show()
-
 
 # === 构建 NetworkX 图 ===
 G = nx.DiGraph()
@@ -418,13 +307,15 @@ for node in node_names:
 for i, link in enumerate(links):
     u = link['from']
     v = link['to']
-    flow_val = x[i]  # 最终流量
+    q = x[i]  # 最终流量
+    t = get_link_travel_time(x, i)
     # 只添加有流量或原始网络中存在的边（避免重复）
     if not G.has_edge(u, v):
-        G.add_edge(u, v, Q=flow_val)
+        G.add_edge(u, v, Q=q, T=t)
     else:
         # 理论上不会重复，因为 links 已去重
-        G[u][v]['Q'] += flow_val
+        G[u][v]['Q'] += q
+        G[u][v]['T'] += t
 
 # 调用可视化函数
-visualize_network(G, pos)
+visualize_network(G, pos, TTT=TTT_fw)
