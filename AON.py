@@ -1,4 +1,4 @@
-# aon_assignment.py
+# AON.py
 import json
 import math
 import heapq
@@ -45,7 +45,7 @@ for i, pair in enumerate(network['links']['between']):
     })
     link_key_to_index[(u, v)] = len(links) - 1
 
-    # 添加反向 v->u（假设双向）
+    # 添加反向 v->u
     links.append({
         'from': v,
         'to': u,
@@ -58,7 +58,7 @@ for i, pair in enumerate(network['links']['between']):
 
 n_links = len(links)
 
-# 构建邻接表（使用 t0 作为权重）
+# 构建邻接表
 graph = defaultdict(list)
 for idx, link in enumerate(links):
     graph[link['from']].append((link['to'], idx))  # (neighbor, link_index)
@@ -164,31 +164,33 @@ print(f"Total Travel Time (AON-TTT): {TTT_aon:.2f}")
         
 
 # ----------------------------
-# 6. 可视化网络
+# 6. 可视化
 # ----------------------------
+try:
+    from visualize_network import visualize_network
+    import networkx as nx
 
-from visualize_network import visualize_network
-import networkx as nx
+    # === 构建 NetworkX 图 ===
+    G = nx.DiGraph()
 
-# === 构建 NetworkX 图 ===
-G = nx.DiGraph()
+    # 添加节点（确保所有节点都在图中）
+    for node in node_names:
+        G.add_node(node)
 
-# 添加节点（确保所有节点都在图中）
-for node in node_names:
-    G.add_node(node)
+    # 添加边并赋值流量 Q 和行程时间 T
+    for i, link in enumerate(links):
+        u = link['from']
+        v = link['to']
+        q = flow_aon[i]
+        t = get_link_travel_time(flow_aon, i)
+        if not G.has_edge(u, v):
+            G.add_edge(u, v, Q=q, T=t)
+        else:
+            # 理论上不会重复
+            G[u][v]['Q'] += q
+            G[u][v]['T'] += t
 
-# 添加边并赋值流量 Q 和行程时间 T
-for i, link in enumerate(links):
-    u = link['from']
-    v = link['to']
-    q = flow_aon[i]
-    t = get_link_travel_time(flow_aon, i)
-    if not G.has_edge(u, v):
-        G.add_edge(u, v, Q=q, T=t)
-    else:
-        # 理论上不会重复
-        G[u][v]['Q'] += q
-        G[u][v]['T'] += t
-
-# 调用可视化函数
-visualize_network(G, pos, TTT=TTT_aon)
+    # 调用可视化函数
+    visualize_network(G, pos, TTT=TTT_aon)
+except ImportError:
+    print("visualize_network not available. Skipping visualization.")

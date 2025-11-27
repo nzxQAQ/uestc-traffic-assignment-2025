@@ -19,7 +19,7 @@ x_coords = network['nodes']['x']
 y_coords = network['nodes']['y']
 pos = {name: (x, y) for name, x, y in zip(node_names, x_coords, y_coords)}
 
-# 计算欧氏距离（假设单位一致）
+# 计算欧氏距离
 def euclidean_distance(u, v):
     x1, y1 = pos[u]
     x2, y2 = pos[v]
@@ -47,7 +47,7 @@ for i, pair in enumerate(network['links']['between']):
     })
     link_key_to_index[(u, v)] = len(links) - 1
 
-    # 添加反向 v->u（假设双向）
+    # 添加反向 v->u
     links.append({
         'from': v,
         'to': u,
@@ -284,38 +284,40 @@ print("\n=== Frank-Wolfe Flows ===")
 for i, link in enumerate(links):
     if x[i] > 1e-3:  # 只显示有流量的路段
         print(f"{link['from']}->{link['to']}: flow={x[i]:.2f}, capacity={link['capacity']}, "
-              f"t0={link['t0']:.2f}, t={get_link_travel_time(x, i):.2f}")
+                f"t0={link['t0']:.2f}, t={get_link_travel_time(x, i):.2f}")
         
 TTT_fw = compute_total_travel_time(x, links)
 print(f"Total Travel Time (FW-TTT): {TTT_fw:.2f}")
         
 # ----------------------------
-# 6. 可视化网络
+# 6. 可视化
 # ----------------------------
+try:
+    from visualize_network import visualize_network
+    import networkx as nx
 
-from visualize_network import visualize_network
-import networkx as nx
+    # === 构建 NetworkX 图 ===
+    G = nx.DiGraph()
 
-# === 构建 NetworkX 图 ===
-G = nx.DiGraph()
+    # 添加节点（确保所有节点都在图中）
+    for node in node_names:
+        G.add_node(node)
 
-# 添加节点（确保所有节点都在图中）
-for node in node_names:
-    G.add_node(node)
+    # 添加边并赋值流量 Q
+    for i, link in enumerate(links):
+        u = link['from']
+        v = link['to']
+        q = x[i]  # 最终流量
+        t = get_link_travel_time(x, i)
+        # 只添加有流量或原始网络中存在的边（避免重复）
+        if not G.has_edge(u, v):
+            G.add_edge(u, v, Q=q, T=t)
+        else:
+            # 理论上不会重复，因为 links 已去重
+            G[u][v]['Q'] += q
+            G[u][v]['T'] += t
 
-# 添加边并赋值流量 Q
-for i, link in enumerate(links):
-    u = link['from']
-    v = link['to']
-    q = x[i]  # 最终流量
-    t = get_link_travel_time(x, i)
-    # 只添加有流量或原始网络中存在的边（避免重复）
-    if not G.has_edge(u, v):
-        G.add_edge(u, v, Q=q, T=t)
-    else:
-        # 理论上不会重复，因为 links 已去重
-        G[u][v]['Q'] += q
-        G[u][v]['T'] += t
-
-# 调用可视化函数
-visualize_network(G, pos, TTT=TTT_fw)
+    # 调用可视化函数
+    visualize_network(G, pos, TTT=TTT_fw)
+except ImportError:
+    print("visualize_network not available. Skipping visualization.")
