@@ -8,6 +8,7 @@ from calculate import get_link_travel_time, get_total_travel_time
 # ----------------------------
 # 1. 加载数据
 # ----------------------------
+
 with open('data/network.json', 'r') as f:
     network = json.load(f)
 with open('data/demand.json', 'r') as f:
