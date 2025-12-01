@@ -1,4 +1,4 @@
-def visualize_network(G, pos_dict, TTT):
+def visualize_network(G, pos_dict, TTT, title="Traffic Assignment Result"):
     """
     可视化网络：绘制网络图，并显示每条边的流量。
     参数：
@@ -110,7 +110,7 @@ def visualize_network(G, pos_dict, TTT):
     cbar.set_label('Traffic Flow (Q)', fontsize=12)
 
     plt.gca().invert_yaxis()
-    plt.title('Traffic Assignment Result\n(Edge: origin→destination, q: flow, t: travel time)\n', fontsize=14)
+    plt.title(title, fontsize=14)
     
     # === 新增：显示 TTT ===
     if TTT is not None:

@@ -1,6 +1,5 @@
 import json
 import math
-import heapq
 from collections import defaultdict
 def load_network_and_demand(network_file='data/network.json', demand_file='data/demand.json'):
     with open(network_file, 'r') as f:

@@ -1,64 +1,12 @@
 # FW.py
-import heapq
-from collections import defaultdict
 from calculate import line_search_newton, get_link_travel_time, Beckmann_function, get_total_travel_time
 from data_load import load_network_and_demand, build_graph_and_links
+from assignment_utils import all_or_nothing_assignment
+# ----------------------------
+# Frank-Wolfe 用户均衡交通分配
 # ----------------------------
 
-def dijkstra_shortest_path(graph, links, origin, dest, travel_times):
-    """基于给定 travel_times 返回最短路径的 link 索引列表"""
-    dist = defaultdict(lambda: float('inf'))
-    prev_link = {}
-    dist[origin] = 0
-    pq = [(0, origin)]
-
-    while pq:
-        d, u = heapq.heappop(pq)
-        if d != dist[u]:
-            continue
-        if u == dest:
-            break
-        for v, link_idx in graph[u]:
-            tt = travel_times[link_idx]
-            new_dist = d + tt
-            if new_dist < dist[v]:
-                dist[v] = new_dist
-                prev_link[v] = link_idx
-                heapq.heappush(pq, (new_dist, v))
-    
-    if dist[dest] == float('inf'):
-        return None  # 无路径
-    
-    # 回溯路径
-    path_links = []
-    curr = dest
-    while curr != origin:
-        link_idx = prev_link[curr]
-        path_links.append(link_idx)
-        curr = links[link_idx]['from']
-    return path_links
-
-def all_or_nothing_assignment(graph, links, od_demand, travel_times):
-    """全有全无分配：返回流量向量 y"""
-    n_links = len(links)
-    y = [0.0] * n_links
-    for (orig, dest), demand_val in od_demand.items():
-        if demand_val <= 0:
-            continue
-        path = dijkstra_shortest_path(graph, links, orig, dest, travel_times)
-        if path is None:
-            print(f"Warning: No path from {orig} to {dest}")
-            continue
-        for lid in path:
-            y[lid] += demand_val
-    return y
-
-def initialize_with_free_flow(graph, links, od_demand):
-    """用自由流时间做 AON 初始化"""
-    free_flow_tt = [link['t0'] for link in links]
-    return all_or_nothing_assignment(graph, links, od_demand, free_flow_tt)
-
-def frank_wolfe_traffic_assignment(
+def Frank_Wolfe_Traffic_Assignment(
     network_file='data/network.json',
     demand_file='data/demand.json',
     max_iter=500,
@@ -92,10 +40,11 @@ def frank_wolfe_traffic_assignment(
     for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
         od_demand[(o, d)] = od_demand.get((o, d), 0) + amt
 
-    # 4. 初始化
-    x = initialize_with_free_flow(graph, links, od_demand)
+    # 4. 初始化,进行一次 AON 
+    free_flow_tt = [link['t0'] for link in links]
+    x = all_or_nothing_assignment(graph, links, od_demand, free_flow_tt)
 
-    best_obj = float('inf')
+    Beckmann_val_best = float('inf')
     stagnation_count = 0
     converged = False
 
@@ -131,11 +80,11 @@ def frank_wolfe_traffic_assignment(
         
         # 更新
         x_new = [(1 - alpha) * x[i] + alpha * y[i] for i in range(n_links)]
-        obj_val = Beckmann_function(x_new, links)
+        Beckmann_val = Beckmann_function(x_new, links)
         
         # 停滞检测
-        if obj_val < best_obj - 1e-8:
-            best_obj = obj_val
+        if Beckmann_val < Beckmann_val_best - 1e-8:
+            Beckmann_val_best = Beckmann_val
             stagnation_count = 0
         else:
             stagnation_count += 1
@@ -174,15 +123,14 @@ def frank_wolfe_traffic_assignment(
 # 主程序入口
 # ----------------------------
 if __name__ == '__main__':
-    FW_result = frank_wolfe_traffic_assignment(verbose=True)
+    FW_result = Frank_Wolfe_Traffic_Assignment(verbose=True)
     
     print("\n=== Frank-Wolfe Flows ===")
     for i, link in enumerate(FW_result['links']):
         flow = FW_result['flow'][i]
-        if flow > 1e-3:
-            t_val = get_link_travel_time(FW_result['flow'], i, FW_result['links'])
-            print(f"{link['from']}->{link['to']}: flow={flow:.2f}, "
-                  f"capacity={link['capacity']}, t0={link['t0']:.2f}, t={t_val:.2f}")
+        t_val = get_link_travel_time(FW_result['flow'], i, FW_result['links'])
+        print(f"{link['from']}->{link['to']}: flow={flow:.2f}, "
+                f"capacity={link['capacity']}, t0={link['t0']:.2f}, t={t_val:.2f}")
     
     print(f"\nTotal Travel Time (FW-TTT): {FW_result['total_travel_time']:.2f},"
           f" Beckmann_value: {FW_result['Beckmann_value']:.2f}, ")
@@ -202,6 +150,7 @@ if __name__ == '__main__':
             t = get_link_travel_time(FW_result['flow'], i, FW_result['links'])
             G.add_edge(u, v, Q=q, T=t)
         
-        visualize_network(G, FW_result['pos'], TTT=FW_result['total_travel_time'])
+        visualize_network(G, FW_result['pos'], TTT=FW_result['total_travel_time'],
+                        title="Frank-Wolfe Assignment Result")
     except ImportError:
         print("visualize_network not available. Skipping visualization.")
