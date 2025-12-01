@@ -8,7 +8,7 @@ from assignment_utils import all_or_nothing_assignment
 def Incremental_Traffic_Assignment(
     network_file='data/network.json',
     demand_file='data/demand.json',
-    K=5,
+    K=10,
     verbose=True
 ):
     """
@@ -67,7 +67,11 @@ def Incremental_Traffic_Assignment(
 # 主程序入口
 # ----------------------------
 if __name__ == '__main__':
-    IA_result = Incremental_Traffic_Assignment(K=10, verbose=True)
+    # 将总 OD 需求划分为的份数，可手动修改
+    K = 5000
+    IA_title=f"Incremental Assignment Result(K = {K})"
+    
+    IA_result = Incremental_Traffic_Assignment(K=K, verbose=True)
 
     print("\n=== Incremental Assignment Link Flows ===")
     for i, link in enumerate(IA_result['links']):
@@ -90,6 +94,6 @@ if __name__ == '__main__':
             t = get_link_travel_time(IA_result['flow'], i, IA_result['links'])
             G.add_edge(u, v, Q=q, T=t)
         visualize_network(G, IA_result['pos'], TTT=IA_result['total_travel_time'], 
-                        title="Incremental Assignment Result")
+                        title=IA_title)
     except ImportError:
         print("visualize_network not available. Skipping visualization.")
