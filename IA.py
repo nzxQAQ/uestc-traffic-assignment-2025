@@ -3,6 +3,7 @@ import json
 import math
 import heapq
 from collections import defaultdict
+from calculate import get_link_travel_time, get_total_travel_time
 
 # ----------------------------
 # 1. 加载数据
@@ -57,12 +58,6 @@ print(f"Total OD demand: {total_demand}")
 # ----------------------------
 # 3. 辅助函数
 # ----------------------------
-def get_link_travel_time(flow, link_idx):
-    """BPR 函数：t = t0 * (1 + (Q/C))^2"""
-    C = links[link_idx]['capacity']
-    t0 = links[link_idx]['t0']
-    Q = flow[link_idx]
-    return t0 * (1 + (Q / C)) ** 2
 
 def dijkstra_all_or_nothing_with_flow(graph, od_demand_partial, flow_current):
     """基于当前 flow 的行程时间，执行一次 AON 分配"""
@@ -81,7 +76,7 @@ def dijkstra_all_or_nothing_with_flow(graph, od_demand_partial, flow_current):
             if u == dest:
                 break
             for v, link_idx in graph[u]:
-                tt = get_link_travel_time(flow_current, link_idx)
+                tt = get_link_travel_time(flow_current, link_idx, links)
                 new_dist = d + tt
                 if new_dist < dist[v]:
                     dist[v] = new_dist
@@ -100,13 +95,6 @@ def dijkstra_all_or_nothing_with_flow(graph, od_demand_partial, flow_current):
             y[lid] += demand_val
     return y
 
-def compute_total_travel_time(flow_vector):
-    total = 0.0
-    for i, q in enumerate(flow_vector):
-        if q > 0:
-            t = get_link_travel_time(flow_vector, i)
-            total += q * t
-    return total
 
 # ----------------------------
 # 4. 增量分配主逻辑
@@ -131,10 +119,10 @@ for k in range(1, K + 1):
 print("\n=== Incremental Assignment Link Flows ===")
 for i, link in enumerate(links):
     if x[i] > 1e-3:
-        t_val = get_link_travel_time(x, i)
+        t_val = get_link_travel_time(x, i, links)
         print(f"{link['from']}->{link['to']}: flow={x[i]:.2f}, t={t_val:.2f}")
 
-TTT_inc = compute_total_travel_time(x)
+TTT_inc = get_total_travel_time(x, links)
 print(f"\n📊 Total Travel Time (Incremental): {TTT_inc:.2f} veh·h")
 
 # ----------------------------
@@ -150,7 +138,7 @@ try:
     for i, link in enumerate(links):
         u, v = link['from'], link['to']
         q = x[i]
-        t = get_link_travel_time(x, i)
+        t = get_link_travel_time(x, i, links)
         G.add_edge(u, v, Q=q, T=t)
 
     visualize_network(G, pos, TTT_inc)

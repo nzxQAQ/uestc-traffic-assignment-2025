@@ -22,5 +22,5 @@ pip install -r requirements.txt
 将准备好的交通现状OD分布矩阵、交通现状时间代价矩阵、交通未来OD总量、交通未来时间代价矩阵数据填入.csv格式文件中,表格不需要输入行列的标题。数据文件放置于data目录下。
 - 输入下面的命令开始迭代计算
 ```bash
-python main.py --edges <your edges data path> --od <your OD data path> --pos <your data that describe the position of network node> --max_iter <maximum iteration> --tol <tolerance of update step>
+python AON.py 
 ```

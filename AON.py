@@ -3,6 +3,7 @@ import json
 import math
 import heapq
 from collections import defaultdict
+from calculate import get_link_travel_time, get_total_travel_time
 
 # ----------------------------
 # 1. 加载数据
@@ -24,7 +25,7 @@ def euclidean_distance(u, v):
     x2, y2 = pos[v]
     return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
-# 构建有向边列表（仅用于构建图，AON 使用 t0）
+# 构建有向边列表（仅用于构建图）
 links = []
 link_key_to_index = {}
 
@@ -124,42 +125,14 @@ flow_aon = dijkstra_all_or_nothing(graph, od_demand, n_links)
 # ----------------------------
 # 5. 输出结果
 # ----------------------------
-# 计算每条边的行程时间
-def get_link_travel_time(flow_vector, link_idx):
-    """BPR 函数：t = t0 * (1 + (Q/C))^2"""
-    C = links[link_idx]['capacity']
-    t0 = links[link_idx]['t0']
-    Q = flow_vector[link_idx]
-    return t0 * (1 + (Q / C) ) ** 2
-
-def compute_total_travel_time(flow_vector, links):
-    """
-    计算所有出行者的总行程时间。
-    参数:
-        flow_vector: list，每条 link 的流量 [q0, q1, ..., qn]
-        links: list，每条 link 的信息（含 capacity, t0）
-    返回:
-        total_tt: float，总行程时间
-    """
-    total_travel_time = 0.0
-    for i in range(len(links)):
-        q = flow_vector[i]
-        if q <= 0:
-            continue
-        # 使用 BPR 函数计算当前流量下的行程时间
-        C = links[i]['capacity']
-        t0 = links[i]['t0']
-        t = t0 * (1 + (q / C)) ** 2   # BPR: β=2
-        total_travel_time += q * t
-    return total_travel_time
 
 print("\n=== All-or-Nothing Link Flows (based on free-flow time) ===")
 for i, link in enumerate(links):
     if flow_aon[i] > 1e-3:
         print(f"{link['from']}->{link['to']}: flow={flow_aon[i]:.2f}, capacity={link['capacity']}, "
-                f"t0={link['t0']:.2f}, t={get_link_travel_time(flow_aon, i):.2f}")
+                f"t0={link['t0']:.2f}, t={get_link_travel_time(flow_aon, i, links):.2f}")
         
-TTT_aon = compute_total_travel_time(flow_aon, links)
+TTT_aon = get_total_travel_time(flow_aon, links)
 print(f"Total Travel Time (AON-TTT): {TTT_aon:.2f}")
         
 
@@ -182,7 +155,7 @@ try:
         u = link['from']
         v = link['to']
         q = flow_aon[i]
-        t = get_link_travel_time(flow_aon, i)
+        t = get_link_travel_time(flow_aon, i, links)
         if not G.has_edge(u, v):
             G.add_edge(u, v, Q=q, T=t)
         else:

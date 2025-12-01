@@ -2,6 +2,7 @@ import json
 import math
 import heapq
 from collections import defaultdict
+from calculate import line_search_newton, get_link_travel_time, Beckmann_function, get_total_travel_time
 
 # ----------------------------
 # 1. 加载数据
@@ -79,15 +80,8 @@ for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
 print(f"Total OD demand: {total_demand}")
 
 # ----------------------------
-# 3. 辅助函数
+# 3. 全有全无分配函数
 # ----------------------------
-
-def get_link_travel_time(flow, link_idx):
-    """BPR 函数：t = t0 * (1 + (Q/C))^2"""
-    C = links[link_idx]['capacity']
-    t0 = links[link_idx]['t0']
-    Q = flow[link_idx]
-    return t0 * (1 + (Q / C) ) ** 2
 
 def dijkstra_all_or_nothing(graph, od_demand, flow):
     """全有全无分配：返回新的流量向量 y"""
@@ -109,7 +103,7 @@ def dijkstra_all_or_nothing(graph, od_demand, flow):
             if u == dest:
                 break
             for v, link_idx in graph[u]:
-                tt = get_link_travel_time(flow, link_idx)
+                tt = get_link_travel_time(flow, link_idx, links)
                 new_dist = d + tt
                 if new_dist < dist[v]:
                     dist[v] = new_dist
@@ -134,159 +128,62 @@ def dijkstra_all_or_nothing(graph, od_demand, flow):
 
     return y
 
-def objective_function(flow):
-    """计算总系统旅行时间（目标函数）"""
-    total = 0.0
-    for i, q in enumerate(flow):
-        C = links[i]['capacity']
-        t0 = links[i]['t0']
-        # 积分 ∫0^q t0*(1 + (x/C))^2 dx = t0*(q + q^2/C + q^3/(3*C^2))
-        total += t0 * (q + (q ** 2) / C + (q ** 3) / (3 * C ** 2))
-        
-    return total
-
-def line_search(x, y):
-    """
-    在方向 d = y - x 上寻找最优步长 alpha ∈ [0, 1]
-    使用高密度采样，尤其在 [0, 0.1] 区间，避免因采样稀疏错过最小值。
-    """
-    def phi(alpha):
-        total = 0.0
-        for i in range(len(links)):
-            q = (1 - alpha) * x[i] + alpha * y[i]
-            t0 = links[i]['t0']
-            C = links[i]['capacity']
-            # 正确的 BPR 积分：t(Q) = t0 * (1 + Q/C)^2
-            total += t0 * (q + (q ** 2) / C + (q ** 3) / (3 * C ** 2))
-        return total
-
-    # 特殊处理初始零解：直接全赋值
-    if all(v == 0 for v in x):
-        return 1.0
-
-    # 构建非均匀采样点：在 [0, 0.1] 高密度，其余均匀
-    candidates = set()
-    candidates.add(0.0)
-    candidates.add(1.0)
-    
-    # [0, 0.1] 以 0.001 步长采样（100 个点）
-    for i in range(1, 101):
-        candidates.add(i * 0.001)  # 0.001 到 0.1
-    
-    # [0.1, 1.0] 以 0.01 步长采样（90 个点）
-    for i in range(11, 101):
-        candidates.add(i * 0.01)   # 0.11 到 1.0
-
-    # 转为排序列表（虽非必需，但便于调试）
-    candidates = sorted(candidates)
-
-    # 寻找使 phi(alpha) 最小的 alpha
-    best_alpha = 0.0
-    best_val = phi(0.0)
-
-    for a in candidates:
-        val = phi(a)
-        if val < best_val:
-            best_val = val
-            best_alpha = a
-
-    # 安全机制：如果最优 alpha 过小但存在明显下降，可考虑保留；
-    # 但此处信任采样结果。
-    return best_alpha
-
 # ----------------------------
 # 4. Frank-Wolfe 主循环
 # ----------------------------
 
 # 初始化流量
 x = [0.0] * n_links
-max_iter = 100
-epsilon = 1e-4
-
-# for iteration in range(1, max_iter + 1):
-#     # Step 1: 全有全无分配 → y
-#     y = dijkstra_all_or_nothing(graph, od_demand, x)
-
-#     # Step 2: 计算方向 d = y - x
-#     d_norm = sum(abs(y[i] - x[i]) for i in range(n_links))
-#     if d_norm < epsilon * total_demand:
-#         print(f"Converged at iteration {iteration}")
-#         break
-
-#     # Step 3: 线搜索求最优 alpha
-#     alpha = line_search(x, y)
-#     # alpha = 0.5  # 简化处理，固定步长
-
-#     # Step 4: 更新流量
-#     x = [(1 - alpha) * x[i] + alpha * y[i] for i in range(n_links)]
-
-#     # 可选：打印进度
-#     if iteration % 10 == 0 or iteration == 1:
-#         obj_val = objective_function(x)
-#         print(f"Iter {iteration}: Obj={obj_val:.2f}, Alpha={alpha:.4f}, DirNorm={d_norm:.2f}")
+max_iter = 500
+epsilon = 1e-6
 
 for iteration in range(1, max_iter + 1):
     # === 全有全无分配 → y ===
     y = dijkstra_all_or_nothing(graph, od_demand, x)
+    t_current = [get_link_travel_time(x, i, links) for i in range(n_links)]
 
-    # === 计算相对间隙 ===
-    total_time_x = sum(get_link_travel_time(x, i) * x[i] for i in range(n_links))
-    total_time_y = sum(get_link_travel_time(x, i) * y[i] for i in range(n_links))
-    relative_gap = (total_time_x - total_time_y) / total_time_x if total_time_x > 1e-6 else float('inf')
+    # === 计算相对间隙 gap,用于评价解的精度 ===
+    numerator = sum((x[i] - y[i]) * t_current[i] for i in range(n_links))
+    denominator = sum(x[i] * t_current[i] for i in range(n_links))
+    
+    if denominator < 1e-12:
+        relative_gap = float('inf')
+    else:
+        relative_gap = numerator / denominator
 
     # === 如果相对间隙足够小，立即收敛 ===
-    if relative_gap < 1e-4:  # 0.01% gap，标准阈值
+    if relative_gap < epsilon:  
         print(f"✅ Converged at iter {iteration} with relative gap = {relative_gap:.2e}")
         break
 
     # === 否则，继续迭代（即使 alpha 很小）===
-    alpha = line_search(x, y)
+    alpha = line_search_newton(x, y, links)
 
-    # 【可选】防卡死：如果 alpha 极小但 gap 仍大，强制小步长
-    if alpha < 1e-5 and relative_gap > 1e-3:
-        alpha = 0.01
+    # 【可选】防卡死：如果 alpha 极小但 gap 仍大，强制推进步长
+    # if alpha <= 0.001 and relative_gap > 0.001:
+    #     alpha = 0.01
         
     # === 更新流量 ===
     x = [(1 - alpha) * x[i] + alpha * y[i] for i in range(n_links)]
 
     # === 调试日志 ===
-    if iteration % 10 == 0 or alpha < 1e-4:
-        obj_val = objective_function(x)
-        dir_norm = sum(abs(y[i] - x[i]) for i in range(n_links))
-        print(f"Iter {iteration}: Obj={obj_val:.2f}, Alpha={alpha:.6f}, RelGap={relative_gap:.2e}, DirNorm={dir_norm:.2f}")
+    # if iteration % 10 == 0 or alpha < 1e-4:
+    obj_val = Beckmann_function(x, links)
+    TTT_cur = get_total_travel_time(x, links)
+    dir_norm = sum(abs(y[i] - x[i]) for i in range(n_links))
+    print(f"Iter {iteration}: Obj={obj_val:.6f}, Alpha={alpha:.6f}, "
+        f"RelGap={relative_gap:.2e}, DirNorm={dir_norm:.2f}, TotalTime={TTT_cur:.2f}")
 
 # ----------------------------
 # 5. 输出结果
 # ----------------------------
 
-def compute_total_travel_time(flow_vector, links):
-    """
-    计算所有出行者的总行程时间。
-    参数:
-        flow_vector: list，每条 link 的流量 [q0, q1, ..., qn]
-        links: list，每条 link 的信息（含 capacity, t0）
-    返回:
-        total_tt: float，总行程时间
-    """
-    total_travel_time = 0.0
-    for i in range(len(links)):
-        q = flow_vector[i]
-        if q <= 0:
-            continue
-        # 使用 BPR 函数计算当前流量下的行程时间
-        C = links[i]['capacity']
-        t0 = links[i]['t0']
-        t = t0 * (1 + (q / C)) ** 2   # BPR: β=2
-        total_travel_time += q * t
-    return total_travel_time
-
 print("\n=== Frank-Wolfe Flows ===")
 for i, link in enumerate(links):
-    if x[i] > 1e-3:  # 只显示有流量的路段
-        print(f"{link['from']}->{link['to']}: flow={x[i]:.2f}, capacity={link['capacity']}, "
-                f"t0={link['t0']:.2f}, t={get_link_travel_time(x, i):.2f}")
+    print(f"{link['from']}->{link['to']}: flow={x[i]:.2f}, capacity={link['capacity']}, "
+            f"t0={link['t0']:.2f}, t={get_link_travel_time(x, i, links):.2f}")
         
-TTT_fw = compute_total_travel_time(x, links)
+TTT_fw = get_total_travel_time(x, links)
 print(f"Total Travel Time (FW-TTT): {TTT_fw:.2f}")
         
 # ----------------------------
@@ -308,7 +205,7 @@ try:
         u = link['from']
         v = link['to']
         q = x[i]  # 最终流量
-        t = get_link_travel_time(x, i)
+        t = get_link_travel_time(x, i, links)  # 最终行程时间
         # 只添加有流量或原始网络中存在的边（避免重复）
         if not G.has_edge(u, v):
             G.add_edge(u, v, Q=q, T=t)
