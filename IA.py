@@ -8,7 +8,7 @@ from assignment_utils import all_or_nothing_assignment
 def Incremental_Traffic_Assignment(
     network_file='data/network.json',
     demand_file='data/demand.json',
-    K=10,
+    K=1000,
     verbose=True
 ):
     """
@@ -68,7 +68,7 @@ def Incremental_Traffic_Assignment(
 # ----------------------------
 if __name__ == '__main__':
     # 将总 OD 需求划分为的份数，可手动修改
-    K = 5000
+    K = 5
     IA_title=f"Incremental Assignment Result(K = {K})"
     
     IA_result = Incremental_Traffic_Assignment(K=K, verbose=True)
