@@ -1,221 +1,207 @@
 # FW.py
-import json
-import math
 import heapq
 from collections import defaultdict
-from calculate import  get_link_travel_time, get_total_travel_time, line_search_newton, Beckmann_function
-
-# ----------------------------
-# 1. 加载数据
+from calculate import line_search_newton, get_link_travel_time, Beckmann_function, get_total_travel_time
+from data_load import load_network_and_demand, build_graph_and_links
 # ----------------------------
 
-with open('data/network.json', 'r') as f:
-    network = json.load(f)
+def dijkstra_shortest_path(graph, links, origin, dest, travel_times):
+    """基于给定 travel_times 返回最短路径的 link 索引列表"""
+    dist = defaultdict(lambda: float('inf'))
+    prev_link = {}
+    dist[origin] = 0
+    pq = [(0, origin)]
 
-with open('data/demand.json', 'r') as f:
-    demand = json.load(f)
+    while pq:
+        d, u = heapq.heappop(pq)
+        if d != dist[u]:
+            continue
+        if u == dest:
+            break
+        for v, link_idx in graph[u]:
+            tt = travel_times[link_idx]
+            new_dist = d + tt
+            if new_dist < dist[v]:
+                dist[v] = new_dist
+                prev_link[v] = link_idx
+                heapq.heappush(pq, (new_dist, v))
+    
+    if dist[dest] == float('inf'):
+        return None  # 无路径
+    
+    # 回溯路径
+    path_links = []
+    curr = dest
+    while curr != origin:
+        link_idx = prev_link[curr]
+        path_links.append(link_idx)
+        curr = links[link_idx]['from']
+    return path_links
 
-# 节点坐标映射
-node_names = network['nodes']['name']
-x_coords = network['nodes']['x']
-y_coords = network['nodes']['y']
-pos = {name: (x, y) for name, x, y in zip(node_names, x_coords, y_coords)}
-
-# 计算欧氏距离
-def euclidean_distance(u, v):
-    x1, y1 = pos[u]
-    x2, y2 = pos[v]
-    return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-
-# 构建有向边列表
-links = []
-link_key_to_index = {}  # (u, v) -> index in links
-
-for i, pair in enumerate(network['links']['between']):
-    u, v = pair[0], pair[1]
-    length = euclidean_distance(u, v)
-    capacity = network['links']['capacity'][i]
-    speedmax = network['links']['speedmax'][i]
-    t0 = length / speedmax  # 自由流行程时间
-
-    # 添加正向 u->v
-    links.append({
-        'from': u,
-        'to': v,
-        'length': length,
-        'capacity': capacity,
-        'speedmax': speedmax,
-        't0': t0
-    })
-    link_key_to_index[(u, v)] = len(links) - 1
-
-    # 添加反向 v->u
-    links.append({
-        'from': v,
-        'to': u,
-        'length': length,
-        'capacity': capacity,
-        'speedmax': speedmax,
-        't0': t0
-    })
-    link_key_to_index[(v, u)] = len(links) - 1
-
-n_links = len(links)
-
-# 构建邻接表（用于 Dijkstra）
-graph = defaultdict(list)
-for idx, link in enumerate(links):
-    graph[link['from']].append((link['to'], idx))  # (neighbor, link_index)
-
-# ----------------------------
-# 2. OD 需求整理
-# ----------------------------
-
-od_pairs = list(zip(demand['from'], demand['to']))
-od_demand = {}
-total_demand = 0
-for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
-    od_demand[(o, d)] = od_demand.get((o, d), 0) + amt
-    total_demand += amt
-
-print(f"Total OD demand: {total_demand}")
-
-# ----------------------------
-# 3. 全有全无分配函数
-# ----------------------------
-
-def dijkstra_all_or_nothing(graph, od_demand, flow):
-    """全有全无分配：返回新的流量向量 y"""
+def all_or_nothing_assignment(graph, links, od_demand, travel_times):
+    """全有全无分配：返回流量向量 y"""
+    n_links = len(links)
     y = [0.0] * n_links
     for (orig, dest), demand_val in od_demand.items():
         if demand_val <= 0:
             continue
-        # Dijkstra 最短路径（基于当前 flow 的时间）
-        dist = defaultdict(lambda: float('inf'))
-        prev = {}
-        prev_link = {}
-        dist[orig] = 0
-        pq = [(0, orig)]
-
-        while pq:
-            d, u = heapq.heappop(pq)
-            if d != dist[u]:
-                continue
-            if u == dest:
-                break
-            for v, link_idx in graph[u]:
-                tt = get_link_travel_time(flow, link_idx, links)
-                new_dist = d + tt
-                if new_dist < dist[v]:
-                    dist[v] = new_dist
-                    prev[v] = u
-                    prev_link[v] = link_idx
-                    heapq.heappush(pq, (new_dist, v))
-
-        # 回溯路径并分配流量
-        if dist[dest] == float('inf'):
+        path = dijkstra_shortest_path(graph, links, orig, dest, travel_times)
+        if path is None:
             print(f"Warning: No path from {orig} to {dest}")
             continue
-
-        path_links = []
-        curr = dest
-        while curr != orig:
-            link_idx = prev_link[curr]
-            path_links.append(link_idx)
-            curr = prev[curr]
-
-        for lid in path_links:
+        for lid in path:
             y[lid] += demand_val
-
     return y
 
-# ----------------------------
-# 4. Frank-Wolfe 主循环
-# ----------------------------
+def initialize_with_free_flow(graph, links, od_demand):
+    """用自由流时间做 AON 初始化"""
+    free_flow_tt = [link['t0'] for link in links]
+    return all_or_nothing_assignment(graph, links, od_demand, free_flow_tt)
 
-# 初始化流量
-x = [0.0] * n_links
-max_iter = 500
-epsilon = 1e-6
-
-for iteration in range(1, max_iter + 1):
-    # === 全有全无分配 → y ===
-    y = dijkstra_all_or_nothing(graph, od_demand, x)
-    t_current = [get_link_travel_time(x, i, links) for i in range(n_links)]
-
-    # === 计算相对间隙 gap,用于评价解的精度 ===
-    numerator = sum((x[i] - y[i]) * t_current[i] for i in range(n_links))
-    denominator = sum(x[i] * t_current[i] for i in range(n_links))
+def frank_wolfe_traffic_assignment(
+    network_file='data/network.json',
+    demand_file='data/demand.json',
+    max_iter=500,
+    epsilon=1e-6,
+    verbose=True
+):
+    """
+    执行 Frank-Wolfe 用户均衡交通分配
     
-    if denominator < 1e-12:
-        relative_gap = float('inf')
-    else:
-        relative_gap = numerator / denominator
+    Returns:
+        dict: {
+            'flow': x,
+            'total_travel_time': TTT,
+            'Beckmann_value': Z(x),
+            'iterations': iteration,
+            'converged': bool,
+            'graph': graph,
+            'links': links,
+            'pos': pos,
+            'node_names': node_names
+        }
+    """
+    # 1. 加载数据
+    network, demand = load_network_and_demand(network_file, demand_file)
+    
+    # 2. 构建图结构
+    graph, links, pos, node_names, n_links = build_graph_and_links(network)
+    
+    # 3. 整理 OD 需求
+    od_demand = {}
+    for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
+        od_demand[(o, d)] = od_demand.get((o, d), 0) + amt
 
-    # === 如果相对间隙足够小，立即收敛 ===
-    if relative_gap < epsilon:  
-        print(f"✅ Converged at iter {iteration} with relative gap = {relative_gap:.2e}")
-        break
+    # 4. 初始化
+    x = initialize_with_free_flow(graph, links, od_demand)
 
-    # === 否则，继续迭代（即使 alpha 很小）===
-    alpha = line_search_newton(x, y, links)
+    best_obj = float('inf')
+    stagnation_count = 0
+    converged = False
 
-    # 【可选】防卡死：如果 alpha 极小但 gap 仍大，强制推进步长
-    # if alpha <= 0.001 and relative_gap > 0.001:
-    #     alpha = 0.01
+    # 5. 主循环
+    for iteration in range(1, max_iter + 1):
+        # 当前阻抗
+        t_current = [get_link_travel_time(x, i, links) for i in range(n_links)]
         
-    # === 更新流量 ===
-    x = [(1 - alpha) * x[i] + alpha * y[i] for i in range(n_links)]
-
-    # === 调试日志 ===
-    # if iteration % 10 == 0 or alpha < 1e-4:
-    obj_val = Beckmann_function(x, links)
-    TTT_cur = get_total_travel_time(x, links)
-    dir_norm = sum(abs(y[i] - x[i]) for i in range(n_links))
-    print(f"Iter {iteration}: Obj={obj_val:.6f}, Alpha={alpha:.6f}, "
-        f"RelGap={relative_gap:.2e}, DirNorm={dir_norm:.2f}, TotalTime={TTT_cur:.2f}")
-
-# ----------------------------
-# 5. 输出结果
-# ----------------------------
-
-print("\n=== Frank-Wolfe Flows ===")
-for i, link in enumerate(links):
-    print(f"{link['from']}->{link['to']}: flow={x[i]:.2f}, capacity={link['capacity']}, "
-            f"t0={link['t0']:.2f}, t={get_link_travel_time(x, i, links):.2f}")
+        # 全有全无分配
+        y = all_or_nothing_assignment(graph, links, od_demand, t_current)
         
-TTT_fw = get_total_travel_time(x, links)
-print(f"Total Travel Time (FW-TTT): {TTT_fw:.2f}")
+        # 相对间隙
+        numerator = sum((x[i] - y[i]) * t_current[i] for i in range(n_links))
+        denominator = sum(x[i] * t_current[i] for i in range(n_links))
+        relative_gap = numerator / denominator if denominator > 1e-12 else float('inf')
         
-# ----------------------------
-# 6. 可视化
-# ----------------------------
-try:
-    from visualize_network import visualize_network
-    import networkx as nx
-
-    # === 构建 NetworkX 图 ===
-    G = nx.DiGraph()
-
-    # 添加节点（确保所有节点都在图中）
-    for node in node_names:
-        G.add_node(node)
-
-    # 添加边并赋值流量 Q
-    for i, link in enumerate(links):
-        u = link['from']
-        v = link['to']
-        q = x[i]  # 最终流量
-        t = get_link_travel_time(x, i, links)  # 最终行程时间
-        # 只添加有流量或原始网络中存在的边（避免重复）
-        if not G.has_edge(u, v):
-            G.add_edge(u, v, Q=q, T=t)
+        # 收敛检查
+        if relative_gap >= 0 and relative_gap < epsilon:
+            converged = True
+            if verbose:
+                print(f"✅ Converged at iter {iteration} with relative gap = {relative_gap:.2e}")
+            break
+        
+        # 线搜索
+        if iteration == 1 and all(v == 0 for v in x):
+            alpha = 1.0
         else:
-            # 理论上不会重复，因为 links 已去重
-            G[u][v]['Q'] += q
-            G[u][v]['T'] += t
+            alpha = line_search_newton(x, y, links)
+            alpha = max(0.0, min(1.0, alpha))  # 保护
+            
+            if alpha < 1e-6 and relative_gap > 1e-3:
+                alpha = min(0.1, 2.0 / (iteration + 1))
+        
+        # 更新
+        x_new = [(1 - alpha) * x[i] + alpha * y[i] for i in range(n_links)]
+        obj_val = Beckmann_function(x_new, links)
+        
+        # 停滞检测
+        if obj_val < best_obj - 1e-8:
+            best_obj = obj_val
+            stagnation_count = 0
+        else:
+            stagnation_count += 1
+        
+        if stagnation_count >= 20:
+            if verbose:
+                print(f"⚠️ Stagnation detected at iteration {iteration}")
+            break
+        
+        x = x_new
+        
+        # 日志
+        if verbose and (iteration % 10 == 0 or iteration <= 5):
+            TTT_cur = get_total_travel_time(x, links)
+            dir_norm = sum(abs(y[i] - x[i]) for i in range(n_links))
+            print(f"Iter {iteration:3d}: Beckmann Z(x)={obj_val:.2f}, Alpha={alpha:.6f}, "
+                  f"Gap={relative_gap:.2e}, DirNorm={dir_norm:.2f}, TTT={TTT_cur:.2f}")
+    
+    # 最终结果
+    final_TTT = get_total_travel_time(x, links)
+    final_obj = Beckmann_function(x, links)
+    
+    return {
+        'flow': x,
+        'total_travel_time': final_TTT,
+        'Beckmann_value': final_obj,
+        'iterations': iteration,
+        'converged': converged,
+        'graph': graph,
+        'links': links,
+        'pos': pos,
+        'node_names': node_names
+    }
 
-    # 调用可视化函数
-    visualize_network(G, pos, TTT=TTT_fw)
-except ImportError:
-    print("visualize_network not available. Skipping visualization.")
+# ----------------------------
+# 主程序入口
+# ----------------------------
+if __name__ == '__main__':
+    FW_result = frank_wolfe_traffic_assignment(verbose=True)
+    
+    print("\n=== Frank-Wolfe Flows ===")
+    for i, link in enumerate(FW_result['links']):
+        flow = FW_result['flow'][i]
+        if flow > 1e-3:
+            t_val = get_link_travel_time(FW_result['flow'], i, FW_result['links'])
+            print(f"{link['from']}->{link['to']}: flow={flow:.2f}, "
+                  f"capacity={link['capacity']}, t0={link['t0']:.2f}, t={t_val:.2f}")
+    
+    print(f"\nTotal Travel Time (FW-TTT): {FW_result['total_travel_time']:.2f},"
+          f" Beckmann_value: {FW_result['Beckmann_value']:.2f}, ")
+    
+    # 可视化
+    try:
+        from visualize_network import visualize_network
+        import networkx as nx
+        
+        G = nx.DiGraph()
+        for node in FW_result['node_names']:
+            G.add_node(node)
+        
+        for i, link in enumerate(FW_result['links']):
+            u, v = link['from'], link['to']
+            q = FW_result['flow'][i]
+            t = get_link_travel_time(FW_result['flow'], i, FW_result['links'])
+            G.add_edge(u, v, Q=q, T=t)
+        
+        visualize_network(G, FW_result['pos'], TTT=FW_result['total_travel_time'])
+    except ImportError:
+        print("visualize_network not available. Skipping visualization.")

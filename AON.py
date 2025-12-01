@@ -160,7 +160,7 @@ try:
         if not G.has_edge(u, v):
             G.add_edge(u, v, Q=q, T=t)
         else:
-            # 理论上不会重复
+            # 理论上不会重复，因为 links 已去重
             G[u][v]['Q'] += q
             G[u][v]['T'] += t
 
