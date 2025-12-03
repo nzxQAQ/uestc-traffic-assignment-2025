@@ -6,11 +6,7 @@ from assignment_utils import all_or_nothing_assignment
 # 全有全无交通分配(AON)  
 # ----------------------------
 
-def All_or_Nothing_Traffic_Assignment(
-    network_file='data/network.json',
-    demand_file='data/demand.json',
-    verbose=True
-):
+def All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, od_demand):
     """
     执行基于自由流时间的全有全无交通分配
     
@@ -24,18 +20,7 @@ def All_or_Nothing_Traffic_Assignment(
             'node_names': node_names
         }
     """
-    network, demand = load_network_and_demand(network_file, demand_file)
-    graph, links, pos, node_names, n_links = build_graph_and_links(network)
 
-    od_demand = {}
-    total_demand = 0
-    for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
-        od_demand[(o, d)] = od_demand.get((o, d), 0) + amt
-        total_demand += amt
-
-    if verbose:
-        print(f"Total OD demand: {total_demand}")
-    
     # 构建自由流行程时间
     free_flow_tt = [link['t0'] for link in links]
     
@@ -57,7 +42,22 @@ def All_or_Nothing_Traffic_Assignment(
 # 主程序入口
 # ----------------------------
 if __name__ == '__main__':
-    AON_result = All_or_Nothing_Traffic_Assignment(verbose=True)
+    network_file='data/network.json'
+    demand_file='data/demand.json'
+    
+    # 1. 加载数据
+    network, demand = load_network_and_demand(network_file, demand_file)
+    
+    # 2. 构建图结构
+    graph, links, pos, node_names, n_links = build_graph_and_links(network)
+    
+    # 3. 整理 OD 需求
+    od_demand = {}
+    for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
+        od_demand[(o, d)] = od_demand.get((o, d), 0) + amt
+    
+    # 4. 执行 全有全无交通分配
+    AON_result = All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, od_demand)
 
     print("\n=== All-or-Nothing Link Flows (based on free-flow time) ===")
     for i, link in enumerate(AON_result['links']):

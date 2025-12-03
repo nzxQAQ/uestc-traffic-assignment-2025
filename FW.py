@@ -6,15 +6,14 @@ from assignment_utils import all_or_nothing_assignment
 # Frank-Wolfe 用户均衡交通分配
 # ----------------------------
 
-def Frank_Wolfe_Traffic_Assignment(
-    network_file='data/network.json',
-    demand_file='data/demand.json',
+def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand,
     max_iter=500,
-    epsilon=1e-6,
-    verbose=True
+    tolerance=1e-6,
+    verbose=False
 ):
     """
     执行 Frank-Wolfe 用户均衡交通分配
+    如果需要打印调试信息，请将 verbose 传入为 True
     
     Returns:
         dict: {
@@ -29,18 +28,8 @@ def Frank_Wolfe_Traffic_Assignment(
             'node_names': node_names
         }
     """
-    # 1. 加载数据
-    network, demand = load_network_and_demand(network_file, demand_file)
-    
-    # 2. 构建图结构
-    graph, links, pos, node_names, n_links = build_graph_and_links(network)
-    
-    # 3. 整理 OD 需求
-    od_demand = {}
-    for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
-        od_demand[(o, d)] = od_demand.get((o, d), 0) + amt
 
-    # 4. 初始化,进行一次 AON 
+    # 初始化,进行一次 AON 
     free_flow_tt = [link['t0'] for link in links]
     x = all_or_nothing_assignment(graph, links, od_demand, free_flow_tt)
 
@@ -48,7 +37,7 @@ def Frank_Wolfe_Traffic_Assignment(
     stagnation_count = 0
     converged = False
 
-    # 5. 主循环
+    # 主循环
     for iteration in range(1, max_iter + 1):
         # 当前阻抗
         t_current = [get_link_travel_time(x, i, links) for i in range(n_links)]
@@ -62,7 +51,7 @@ def Frank_Wolfe_Traffic_Assignment(
         relative_gap = numerator / denominator if denominator > 1e-12 else float('inf')
         
         # 收敛检查
-        if relative_gap >= 0 and relative_gap < epsilon:
+        if relative_gap >= 0 and relative_gap < tolerance:
             converged = True
             if verbose:
                 print(f"✅ Converged at iter {iteration} with relative gap = {relative_gap:.2e}")
@@ -100,7 +89,7 @@ def Frank_Wolfe_Traffic_Assignment(
         if verbose and (iteration % 10 == 0 or iteration <= 5):
             TTT_cur = get_total_travel_time(x, links)
             dir_norm = sum(abs(y[i] - x[i]) for i in range(n_links))
-            print(f"Iter {iteration:3d}: Beckmann Z(x)={obj_val:.2f}, Alpha={alpha:.6f}, "
+            print(f"Iter {iteration:3d}: Beckmann Z(x)={Beckmann_val:.2f}, Alpha={alpha:.6f}, "
                   f"Gap={relative_gap:.2e}, DirNorm={dir_norm:.2f}, TTT={TTT_cur:.2f}")
     
     # 最终结果
@@ -123,7 +112,22 @@ def Frank_Wolfe_Traffic_Assignment(
 # 主程序入口
 # ----------------------------
 if __name__ == '__main__':
-    FW_result = Frank_Wolfe_Traffic_Assignment(verbose=True)
+    network_file='data/network.json'
+    demand_file='data/demand.json'
+    
+    # 1. 加载数据
+    network, demand = load_network_and_demand(network_file, demand_file)
+    
+    # 2. 构建图结构
+    graph, links, pos, node_names, n_links = build_graph_and_links(network)
+    
+    # 3. 整理 OD 需求
+    od_demand = {}
+    for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
+        od_demand[(o, d)] = od_demand.get((o, d), 0) + amt
+    
+    # 4. 执行 Frank-Wolfe 分配
+    FW_result = Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand,verbose=True)
     
     print("\n=== Frank-Wolfe Flows ===")
     for i, link in enumerate(FW_result['links']):

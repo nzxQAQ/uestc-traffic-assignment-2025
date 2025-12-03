@@ -1,12 +1,12 @@
 def get_link_travel_time(flow_vector, link_idx, links):
-    """BPR 路阻函数/行程时间函数：t = t0 * (1 + (Q/C))^2"""
+    """路阻函数/行程时间函数：t = t0 * (1 + (Q/C))^2"""
     t0 = links[link_idx]['t0']
     C = links[link_idx]['capacity']
     Q = flow_vector[link_idx]
     return t0 * (1 + (Q / C) ) ** 2
 
 def Beckmann_function(flow_vector, links):
-    """ Beckmann势能函数Z(x)，是对 BPR 函数的积分"""
+    """ Beckmann势能函数Z(x)，是对路阻函数的积分"""
     total = 0.0
     for i, q in enumerate(flow_vector):
         C = links[i]['capacity']

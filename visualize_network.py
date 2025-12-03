@@ -6,6 +6,8 @@ def visualize_network(G, pos_dict, TTT, title="Traffic Assignment Result"):
         pos_dict: dict，节点坐标字典
     """
     import matplotlib.pyplot as plt
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'Arial Unicode MS', 'sans-serif']  # 支持中文
+    plt.rcParams['axes.unicode_minus'] = False  # 解决负号 '-' 显示为方块的问题
     import networkx as nx
     import numpy as np
     import matplotlib.colors as mcolors
@@ -91,7 +93,7 @@ def visualize_network(G, pos_dict, TTT, title="Traffic Assignment Result"):
         ax.annotate(
             label_text,
             xy=(label_x, label_y),
-            fontsize=7.5,  # 稍小以适应三行
+            fontsize=8.0,  # 稍小以适应三行
             color='white',
             ha='center',
             va='center',

@@ -5,11 +5,8 @@ from assignment_utils import all_or_nothing_assignment
 # ----------------------------
 # 增量交通分配（Incremental Assignment）
 # ----------------------------
-def Incremental_Traffic_Assignment(
-    network_file='data/network.json',
-    demand_file='data/demand.json',
-    K=1000,
-    verbose=True
+def Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand,
+    K=1000
 ):
     """
     执行增量交通分配（Incremental Assignment）
@@ -28,18 +25,8 @@ def Incremental_Traffic_Assignment(
             'node_names': node_names
         }
     """
-    network, demand = load_network_and_demand(network_file, demand_file)
-    graph, links, pos, node_names, n_links = build_graph_and_links(network)
-
-    od_demand = {}
-    total_demand = 0
-    for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
-        od_demand[(o, d)] = od_demand.get((o, d), 0) + amt
-        total_demand += amt
-
-    if verbose:
-        print(f"Total OD demand: {total_demand}")
-        print(f"\n=== Incremental Assignment (K={K}) ===")
+    
+    print(f"\n=== Incremental Assignment (K={K}) ===")
 
     step_demand = {od: amt / K for od, amt in od_demand.items()}
     x = [0.0] * n_links
@@ -67,12 +54,25 @@ def Incremental_Traffic_Assignment(
 # 主程序入口
 # ----------------------------
 if __name__ == '__main__':
-    # 将总 OD 需求划分为的份数，可手动修改
-    K = 5
+    network_file='data/network.json'
+    demand_file='data/demand.json'
+    
+    # 1. 加载数据
+    network, demand = load_network_and_demand(network_file, demand_file)
+    
+    # 2. 构建图结构
+    graph, links, pos, node_names, n_links = build_graph_and_links(network)
+    
+    # 3. 整理 OD 需求
+    od_demand = {}
+    for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
+        od_demand[(o, d)] = od_demand.get((o, d), 0) + amt
+    
+    # 将总 OD 需求划分为的份数K，可手动修改
+    K = 1000
     IA_title=f"Incremental Assignment Result(K = {K})"
     
-    IA_result = Incremental_Traffic_Assignment(K=K, verbose=True)
-
+    IA_result = Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand, K=K)
     print("\n=== Incremental Assignment Link Flows ===")
     for i, link in enumerate(IA_result['links']):
         flow = IA_result['flow'][i]
