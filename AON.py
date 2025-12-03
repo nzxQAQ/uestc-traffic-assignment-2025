@@ -24,9 +24,10 @@ def All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, od_demand):
     # 构建自由流行程时间
     free_flow_tt = [link['t0'] for link in links]
     
-    # 调用通用 AON
+    # 调用 AON 函数
     flow_aon = all_or_nothing_assignment(graph, links, od_demand, free_flow_tt)
     
+    # 计算总出行时间
     TTT_aon = get_total_travel_time(flow_aon, links)
 
     return {
@@ -59,6 +60,7 @@ if __name__ == '__main__':
     # 4. 执行 全有全无交通分配
     AON_result = All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, od_demand)
 
+    # 5. 打印结果
     print("\n=== All-or-Nothing Link Flows (based on free-flow time) ===")
     for i, link in enumerate(AON_result['links']):
         flow = AON_result['flow'][i]
@@ -68,7 +70,7 @@ if __name__ == '__main__':
 
     print(f"\nTotal Travel Time (AON-TTT): {AON_result['total_travel_time']:.2f}")
     
-    # 可视化
+    # 6. 可视化
     try:
         from visualize_network import visualize_network
         import networkx as nx

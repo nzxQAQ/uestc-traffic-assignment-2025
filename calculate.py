@@ -38,7 +38,7 @@ def get_total_travel_time(flow_vector, links):
 
 def line_search_newton(x, y, links, max_iter=20, tol=1e-8):
     """
-    使用 Newton-Raphson 方法精确求解最优 alpha ∈ [0, 1]
+    使用 Newton-Raphson 方法精确求解最优步长 alpha ∈ [0, 1]
     利用 phi'(alpha) = sum( (y_i - x_i) * t(q_i(alpha)) )
     """
     n = len(x)

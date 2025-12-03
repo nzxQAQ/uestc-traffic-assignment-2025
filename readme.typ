@@ -43,13 +43,13 @@ $ t_a = t_0 [1 + α (q_a / c_a)^β] $
 
 #strong[（2）基础算法工具模块 {`assignment_utils.py`}]
 
-提供通用的路径搜索与流量分配原语：
+该模块提供`Dijkstra算法`与`全有全无分配函数 all_or_nothing_assignment()`
 - dijkstra_shortest_path()：基于给定阻抗向量，使用 `Dijkstra` 算法求解最短路径，并返回路径上的边索引序列；
-- all_or_nothing_assignment()：调用上述最短路径函数，对所有 OD 对执行一次全有全无分配，返回各边流量向量。此函数在 AON 中被调用一次，在 IA 与 FW 中被多次调用。
+- all_or_nothing_assignment()：调用上述最短路径函数，对所有 OD 对执行一次全有全无分配，返回各边流量向量。此函数在 AON 中会被调用一次，在 IA 与 FW 中会被调用多次。
 
-#strong[（3）交通流计算与评估模块 {`calculate.py`}]
+#strong[（3）数学计算模块 {`calculate.py`}]
 
-封装所有与交通流相关的数学计算：
+该模块封装所有数学计算相关函数：
 - get_link_travel_time()：计算 路阻函数
 #align(center)[$ t(q) = t_0 (1 + q/c)^2 $]
 
@@ -60,19 +60,19 @@ $q_a$：路段 $a$ 上的流量（辆）
 $t_a$：路段 $a$ 上的行程时间（小时）
 
 
-- Beckmann_function()：计算 `Frank-Wolfe` 优化问题的目标函数值；
+- Beckmann_function()：计算 `Frank-Wolfe` 算法a的目标函数` Beckmann势能函数` ；
 - line_search_newton()：采用 `Newton-Raphson` 法精确求解 FW 迭代中的最优步长 $alpha$。
 
 #strong[（4）交通分配算法模块 {`AON.py`, `IA.py`, `FW.py`}]
 
-包含三种独立的分配策略实现，均以统一接口返回流量向量flow 与 路网总出行时间total_travel_time(TTT)：
+该模块包含三种独立的分配策略，均以统一接口返回分配结果：
 - 全有全无分配（{`AON.py`}）：基于自由流时间 $t_0$ 执行一次 全有全无分配函数all_or_nothing_assignment()；
 - 增量分配（{`IA.py`}）：将总需求等分为 $K$ 份，循环调用 AON 并累加流量，每次迭代更新阻抗；
 - Frank-Wolfe 用户均衡分配（{`FW.py`}）：主循环中遍历执行 AON 方向搜索、相对间隙收敛判断、Newton 线搜索寻找最优步长 $alpha$，直至满足精度要求。
 
 #strong[（5）可视化模块 {`visualize_network.py`}]
 
-将分配结果转化为直观图形：
+该模块将分配结果转化为直观图像：
 - 接收 NetworkX 有向图 {G}（每条边含有 流量Q 与 行程时间t 属性）、节点坐标 {pos_dict} 及 路网总出行时间 TTT 值；
 - 自动计算线宽（对数缩放）、颜色映射（流量热力图）；
 - 在每条边上叠加三行标签（路段名、流量 $q$、行程时间 $t$）；
@@ -80,7 +80,7 @@ $t_a$：路段 $a$ 上的行程时间（小时）
 
 #strong[（6）主程序 {`main.py`}]
 
-整合上述模块，实现课程要求的四项核心功能验证：
+引入上述模块，实现课程要求的核心功能验证：
 - 分别构建自由流/拥堵状态下的最短路径查询；
 - 单 OD 对（如 A→F）的用户均衡分析；
 - 多 OD 全网分配下 AON/IA/FW 三算法对比；
@@ -96,26 +96,27 @@ $t_a$：路段 $a$ 上的行程时间（小时）
 - 语言：Python 3.8 或更高版本
 
 #strong[2.核心依赖库 `requirements.txt`]
-所有依赖均通过 {requirements.txt} 文件管理:
+
 - {networkx==3.1}：用于构建与操作有向图结构，支持节点/边属性存储；
 - {numpy==1.24.2}：提供高效的数组运算，用于流量向量与矩阵计算；
 - {matplotlib==3.7.5}：实现路网拓扑的可视化，支持自定义标签、颜色映射与线宽。
 
 上述版本组合已在 Windows 11 环境下验证兼容性。
 
-#strong[3.安装与运行方式]
-用户可通过以下步骤快速部署本软件：
-(1) 克隆代码仓库至本地;
-(2) 在项目根目录执行命令：
-{pip install -r requirements.txt}
-(3) 运行主程序：
-{python main.py}
+#strong[3.代码克隆与运行]
 
-#strong[4.代码托管]
-完整源代码已开源并托管于 Github 代码仓库，地址如下：
-#link(
-  "https://github.com/nzxQAQ/uestc-traffic-assignment-2025",
-)[https://github.com/nzxQAQ/uestc-traffic-assignment-2025]
+完整源代码已开源并托管于 Github 代码仓库：
+
+https://github.com/nzxQAQ/uestc-traffic-assignment-2025.git
+
+可通过以下步骤快速部署本软件：
+```bash
+git clone https://github.com/nzxQAQ/uestc-traffic-assignment-2025.git # 克隆代码仓库
+pip install -r requirements.txt # 安装依赖
+python main.py # 运行主程序
+```
+
+
 
 
 

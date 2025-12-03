@@ -8,105 +8,90 @@ from assignment_utils import all_or_nothing_assignment
 
 def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand,
     max_iter=500,
-    tolerance=1e-6,
-    verbose=False
-):
+    epsilon=1e-6,
+    verbose=False):
     """
-    执行 Frank-Wolfe 用户均衡交通分配
-    如果需要打印调试信息，请将 verbose 传入为 True
+    按照教材描述的 Frank-Wolfe 算法实现
     
-    Returns:
-        dict: {
+    参数:
+        links: 路段列表
+        graph: 网络图
+        od_demand: OD需求字典
+        max_iter: 最大迭代次数
+        epsilon: 收敛阈值
+        verbose: 是否打印详细信息
+    
+    返回:
+        分配结果字典
+    """
+    
+    # 步骤1: 初始化 - 自由流条件下的AON分配
+    free_flow_tt = [link['t0'] for link in links]
+    x = all_or_nothing_assignment(graph, links, od_demand, free_flow_tt)
+    
+    # 主循环
+    for iteration in range(1, max_iter + 1):
+        # 步骤2: 更新各路段的阻抗
+        t_current = [get_link_travel_time(x, i, links) for i in range(n_links)]
+        
+        # 步骤3: 执行一次全有全无分配，寻找下一步迭代方向
+        y = all_or_nothing_assignment(graph, links, od_demand, t_current)
+        
+        # 步骤4: 确定迭代步长（牛顿法）
+        lambda_val = line_search_newton(x, y, links)
+        lambda_val = max(0.0, min(1.0, lambda_val))  # 约束在[0,1]
+        
+        # 步骤5: 确定新的迭代起点
+        x_new = [x[i] + lambda_val * (y[i] - x[i]) for i in range(n_links)]
+        
+        # 步骤6: 收敛性检验
+        # 分子: sqrt(sum_a (x_a^{n+1} - x_a^n)^2)
+        numerator = sum((x_new[i] - x[i]) ** 2 for i in range(n_links))
+        numerator = (numerator ** 0.5) if numerator > 0 else 0
+        
+        # 分母: sum_a x_a^n
+        denominator = sum(x)
+        
+        convergence_metric = numerator / denominator if denominator > 1e-12 else float('inf')
+        
+        # 打印迭代信息
+        if verbose and (iteration % 5 == 0 or iteration <= 5 or convergence_metric < epsilon):
+            Beckmann_val = Beckmann_function(x_new, links)
+            TTT = get_total_travel_time(x_new, links)
+            print(f"Iter {iteration:3d}: λ={lambda_val:.6f}, "
+                  f"Conv={convergence_metric:.2e}, "
+                  f"Beckmann_val={Beckmann_val:.2f}, TTT={TTT:.2f}")
+        
+        # 检查收敛
+        if convergence_metric < epsilon:
+            if verbose:
+                print(f"✅ 收敛于迭代 {iteration}, 收敛指标 = {convergence_metric:.2e}")
+            converged = True
+            break
+        
+        x = x_new
+    else:
+        # 达到最大迭代次数仍未收敛
+        converged = False
+        if verbose:
+            print(f"⚠️ 达到最大迭代次数 {max_iter}, 未收敛")
+    
+    # 计算最终结果
+    final_TTT = get_total_travel_time(x, links)
+    final_obj = Beckmann_function(x, links)
+
+    return {
             'flow': x,
-            'total_travel_time': TTT,
-            'Beckmann_value': Z(x),
+            'total_travel_time': final_TTT,
+            'Beckmann_value': final_obj,
             'iterations': iteration,
-            'converged': bool,
+            'converged': converged,
             'graph': graph,
             'links': links,
             'pos': pos,
             'node_names': node_names
         }
-    """
 
-    # 初始化,进行一次 AON 
-    free_flow_tt = [link['t0'] for link in links]
-    x = all_or_nothing_assignment(graph, links, od_demand, free_flow_tt)
-
-    Beckmann_val_best = float('inf')
-    stagnation_count = 0
-    converged = False
-
-    # 主循环
-    for iteration in range(1, max_iter + 1):
-        # 当前阻抗
-        t_current = [get_link_travel_time(x, i, links) for i in range(n_links)]
-        
-        # 全有全无分配
-        y = all_or_nothing_assignment(graph, links, od_demand, t_current)
-        
-        # 相对间隙
-        numerator = sum((x[i] - y[i]) * t_current[i] for i in range(n_links))
-        denominator = sum(x[i] * t_current[i] for i in range(n_links))
-        relative_gap = numerator / denominator if denominator > 1e-12 else float('inf')
-        
-        # 收敛检查
-        if relative_gap >= 0 and relative_gap < tolerance:
-            converged = True
-            if verbose:
-                print(f"✅ Converged at iter {iteration} with relative gap = {relative_gap:.2e}")
-            break
-        
-        # 线搜索
-        if iteration == 1 and all(v == 0 for v in x):
-            alpha = 1.0
-        else:
-            alpha = line_search_newton(x, y, links)
-            alpha = max(0.0, min(1.0, alpha))  # 保护
-            
-            if alpha < 1e-6 and relative_gap > 1e-3:
-                alpha = min(0.1, 2.0 / (iteration + 1))
-        
-        # 更新
-        x_new = [(1 - alpha) * x[i] + alpha * y[i] for i in range(n_links)]
-        Beckmann_val = Beckmann_function(x_new, links)
-        
-        # 停滞检测
-        if Beckmann_val < Beckmann_val_best - 1e-8:
-            Beckmann_val_best = Beckmann_val
-            stagnation_count = 0
-        else:
-            stagnation_count += 1
-        
-        if stagnation_count >= 20:
-            if verbose:
-                print(f"⚠️ Stagnation detected at iteration {iteration}")
-            break
-        
-        x = x_new
-        
-        # 日志
-        if verbose and (iteration % 10 == 0 or iteration <= 5):
-            TTT_cur = get_total_travel_time(x, links)
-            dir_norm = sum(abs(y[i] - x[i]) for i in range(n_links))
-            print(f"Iter {iteration:3d}: Beckmann Z(x)={Beckmann_val:.2f}, Alpha={alpha:.6f}, "
-                  f"Gap={relative_gap:.2e}, DirNorm={dir_norm:.2f}, TTT={TTT_cur:.2f}")
-    
-    # 最终结果
-    final_TTT = get_total_travel_time(x, links)
-    final_obj = Beckmann_function(x, links)
-    
-    return {
-        'flow': x,
-        'total_travel_time': final_TTT,
-        'Beckmann_value': final_obj,
-        'iterations': iteration,
-        'converged': converged,
-        'graph': graph,
-        'links': links,
-        'pos': pos,
-        'node_names': node_names
-    }
 
 # ----------------------------
 # 主程序入口
@@ -136,8 +121,7 @@ if __name__ == '__main__':
         print(f"{link['from']}->{link['to']}: flow={flow:.2f}, "
                 f"capacity={link['capacity']}, t0={link['t0']:.2f}, t={t_val:.2f}")
     
-    print(f"\nTotal Travel Time (FW-TTT): {FW_result['total_travel_time']:.2f},"
-          f" Beckmann_value: {FW_result['Beckmann_value']:.2f}, ")
+    print(f"\nTotal Travel Time (FW-TTT): {FW_result['total_travel_time']:.2f} Beckmann_value: {FW_result['Beckmann_value']:.2f} ")
     
     # 可视化
     try:
