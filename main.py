@@ -1,5 +1,4 @@
 # test.py
-import json
 from data_load import load_network_and_demand, build_graph_and_links
 from assignment_utils import dijkstra_shortest_path
 from calculate import get_link_travel_time

@@ -30,10 +30,9 @@ def get_total_travel_time(flow_vector, links):
         q = flow_vector[i]
         if q <= 0:
             continue
-        # 使用 BPR 函数计算当前流量下的行程时间
         C = links[i]['capacity']
         t0 = links[i]['t0']
-        t = t0 * (1 + (q / C)) ** 2   # BPR: β=2
+        t = t0 * (1 + (q / C)) ** 2   
         total_travel_time += q * t
     return total_travel_time
 
