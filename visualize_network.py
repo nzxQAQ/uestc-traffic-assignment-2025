@@ -95,15 +95,20 @@ def visualize_network(G, pos_dict, TTT, title="Traffic Assignment Result"):
         label_y = mid_y + offset[1]
         
         # 三行文本：路段名 + 流量 + 行程时间
-        label_text = f"{u}→{v}\nq={q:.0f}\nt={t:.2f}"
+        label_text = f"{u}→{v}\nq={q:.2f}\nt={t:.2f}"
         ax.annotate(
             label_text,
             xy=(label_x, label_y),
-            fontsize=8.0,  # 稍小以适应三行
+            fontsize=10.0,  # 稍小以适应三行
             color='white',
             ha='center',
             va='center',
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.65),
+            bbox=dict(
+            boxstyle="round,pad=0.3",  # pad 控制内边距
+            facecolor="black", 
+            alpha=0.75,
+            linewidth=0.8  # 边框线宽
+            ),
             zorder=5
         )
 
@@ -136,3 +141,17 @@ def visualize_network(G, pos_dict, TTT, title="Traffic Assignment Result"):
     plt.axis('off')
     plt.tight_layout()
     plt.show()
+
+def print_path(links, path_link_indices):
+    """将路径的 link 索引列表转换为节点序列"""
+    if not path_link_indices:
+        return "No path"
+    nodes = []
+    # 从起点开始回溯（path 是反向的：[last_link, ..., first_link]）
+    current_node = links[path_link_indices[-1]]['from']
+    nodes.append(current_node)
+    for lid in reversed(path_link_indices):
+        next_node = links[lid]['to']
+        nodes.append(next_node)
+        current_node = next_node
+    return " → ".join(nodes)

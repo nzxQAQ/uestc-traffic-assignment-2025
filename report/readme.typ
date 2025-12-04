@@ -401,11 +401,11 @@ def Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
     }
 ```
 
-当 K→∞ 时，增量分配（IA）理论上趋近于用户均衡解；实践中取 K=100 就已能获得较平滑的流量分布。
+
 
 #strong[增量分配（IA）算法特性与局限性]
 
-优点：相比 全有全无（AON），增量分配（IA）能部分捕捉拥堵效应，结果更接近现实；实现简单，仅需在 AON 基础上增加外层循环。
+优点：相比 全有全无（AON），增量分配（IA）能部分捕捉拥堵效应，结果更接近现实；实现简单，仅需在 AON 基础上增加外层循环。当 K→∞ 时，增量分配（IA）理论上趋近于用户均衡解；在本项目中，取 K=30 就已能获得较均衡的流量分布。
 
 局限：仍为启发式方法，不保证满足 Wardrop 第一原理；最终解依赖于 K 的取值和加载顺序（本实现为均匀顺序加载）。
 
@@ -470,6 +470,192 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
 
 = 测试结果
 #problem[不考虑拥堵，任意两点间的最快的路径是什么？]
+这个问题其实是为了验证我们的Dijkstra算法是否正确。
+运行main.py后，可以看到控制台打印了任意两点间的最快路径：（注：如果有多条路径时间相等，仅打印其中一条）
+```python
+A to B: A → B
+A to C: A → B → C
+A to D: A → B → D
+A to E: A → B → C → E
+A to F: A → B → C → E → F
+A to G: A → B → D → G
+B to A: B → A
+B to C: B → C
+B to D: B → D
+B to E: B → C → E
+B to F: B → C → E → F
+B to G: B → D → G
+C to A: C → B → A
+C to B: C → B
+C to D: C → B → D
+C to E: C → E
+C to F: C → E → F
+C to G: C → B → D → G
+D to A: D → B → A
+D to B: D → B
+D to C: D → B → C
+D to E: D → E
+D to F: D → E → F
+D to G: D → G
+E to A: E → C → B → A
+E to B: E → C → B
+E to C: E → C
+E to D: E → D
+E to F: E → F
+E to G: E → D → G
+F to A: F → E → C → B → A
+F to B: F → E → C → B
+F to C: F → E → C
+F to D: F → E → D
+F to E: F → E
+F to G: F → E → D → G
+G to A: G → D → B → A
+G to B: G → D → B
+G to C: G → D → B → C
+G to D: G → D
+G to E: G → D → E
+G to F: G → D → E → F
+```
+
+由于不考虑拥堵，所以流量对行程时间没有影响，所有路段上的行程时间均为自由流行程时间t0。下面是路网可视化结果。
+
+#figure(
+  image("../result/t0.png", width: 100%),
+  caption: [
+    不考虑拥堵时，仅展示各路段上的自由流行程时间t0
+  ],
+)
+
+我们注意到一个有意思的细节：明明BE之间有直接连接的道路，但是BE之间的最快路径却是B→C→E。
+
+这是因为BC与CE道路上的限速为60，而BE上的限速为30，因此 B→C→E 比 B→E 更快。
+
 #problem[假设各路段流量已知，考虑拥堵效应，任意两点之间的最快路径是什么？]
-#problem[只考虑一个起迄点对的交通需求，例如A到F,各路段上的流量是多少？有多个最短的路径，最少被使用的路径？这些路径上的行程时间是否相等？]
+问题2在问题1的基础上，进一步验证我们的行程时间函数函数是否正确实现。
+
+为了回答这个问题，我们使用 FW 分配后的流量作为“已知流量”。
+运行main.py后，可以看到控制台打印了任意两点间最快的路径：
+```python
+A to B: A → B
+A to C: A → B → C
+A to D: A → B → D
+A to E: A → B → C → E
+A to F: A → B → C → E → F
+A to G: A → B → D → G
+B to A: B → A
+B to C: B → C
+B to D: B → D
+B to E: B → C → E
+B to F: B → C → E → F
+B to G: B → D → G
+C to A: C → B → A
+C to B: C → B
+C to D: C → B → D
+C to E: C → E
+C to F: C → E → F
+C to G: C → B → D → G
+D to A: D → B → A
+D to B: D → B
+D to C: D → E → C
+D to E: D → E
+D to F: D → E → F
+D to G: D → G
+E to A: E → C → B → A
+E to B: E → C → B
+E to C: E → C
+E to D: E → D
+E to F: E → F
+E to G: E → D → G
+F to A: F → E → C → B → A
+F to B: F → E → C → B
+F to C: F → E → C
+F to D: F → E → D
+F to E: F → E
+F to G: F → E → D → G
+G to A: G → D → B → A
+G to B: G → D → B
+G to C: G → D → E → C
+G to D: G → D
+G to E: G → D → E
+G to F: G → D → E → F
+```
+
+下面是路网可视化结果。
+
+#figure(
+  image("../result/FW.png", width: 100%),
+  caption: [
+    考虑拥堵，且使用 FW 分配后的流量作为“已知流量”，展示各路段的行程时间t
+  ],
+)
+
+我们注意到一个有意思的细节：在问题1中，D到C之间的最快路径是D → B → C 和 D → E → C，行程时间均为0.33+0.17= 0.5小时。
+
+而在问题2中，程序打印的D到C之间最速的路径只剩下了D → E → C。
+
+因为此时D → B → C上的行程时间 = 0.81 + 0.35 = 1.16小时，
+
+而D → E → C上的行程时间 = 0.54 + 0.26 = 0.8小时
+
+这个小细节验证了我们的程序正确考虑了拥堵效应，实现了对行程时间函数函数的正确计算，并能够正确回答问题2。
+
+#problem[只考虑一个起迄点对的交通需求，例如A到F,各路段上的流量是多少？有多少被使用的路径？这些路径上的行程时间是否相等？]
+
+为了回答这个问题，我们构造了仅含A到F的OD需求，并分别使用AON、IA（K=3、K=1000）与FW算法进行分配。
+```python
+# 构造仅含 A→F 的需求字典
+single_od = {('A', 'F'): 2000}
+
+# 执行 AON 分配（仅此 single_od）
+aon_single_res = All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, single_od)
+
+# 执行 IA 分配（仅此 single_od）
+ia_single_res = Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, single_od, 1000)
+
+# 执行 FW 分配（仅此 single_od）
+fw_single_res = Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, single_od)
+```
+运行main.py后，可视化结果如图：
+#figure(
+  image("../result/AON only AtoF.png", width: 100%),
+  caption: [
+    只考虑A到F的交通需求，使用AON算法的分配结果
+  ],
+)
+我们可以看到，A到F之间只有一条路径 A → B → C → E → F 被使用
+
+但是显然此时路网处于*不平衡状态*，出行者可以通过单方面改变路径来缩短行程时间，
+
+例如 A → B → E → F ，行程时间为1.49 + 0.47 + 1.49 = 3.45小时，
+
+比 A → B → C → E → F 的行程时间1.49 + 0.60 + 0.60 + 1.49 = 4.04小时更快。
+
+#figure(
+  image("../result/IA only AtoF K=3.png", width: 100%),
+  caption: [
+    只考虑A到F的交通需求，使用IA算法的分配结果(K=3)
+  ],
+)
+
+#figure(
+  image("../result/IA only AtoF K=1000.png", width: 100%),
+  caption: [
+    只考虑A到F的交通需求，使用IA算法的分配结果(K=1000)
+  ],
+)
+
+#figure(
+  image("../result/FW only AtoF.png", width: 100%),
+  caption: [
+    只考虑A到F的交通需求，使用FW算法的分配结果
+  ],
+)
+
+我们可以看到，A到F之间有三条路径被使用，分别是：
+- 路径1：A → B → C → E → F，行程时间为1.49+0.35+0.35+1.49=4.04小时
+- 路径2：A → B → E → F，行程时间为1.49+0.69+1.49=4.03小时
+- 路径3：A → B → D → E → F，行程时间为1.49+0.35+0.35+1.49=4.04小时
+- 在可接受的计算误差范围内，3条路径的行程时间都*相等*
+- 此时路网处于*平衡状态*，出行者无法通过单方面改变路径来缩短行程时间，符合Wardrop第一原理！
+
 #problem[考虑所有起迄点对的交通需求，各路段的流量是多少，所有出行者的总出行时间是多少？]
