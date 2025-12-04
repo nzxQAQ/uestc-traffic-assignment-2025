@@ -1,4 +1,4 @@
-# analyze_ia_k_sensitivity.py
+# analyze_IA_k_sensitivity.py
 import matplotlib.pyplot as plt
 from IA import Incremental_Traffic_Assignment
 from data_load import load_network_and_demand, build_graph_and_links
@@ -76,7 +76,7 @@ def analyze_k_sensitivity(network_file='data/network.json',
     plt.legend(fontsize=12)
     
     # 添加文本说明
-    plt.text(0.02, 0.98, f'K tested: {len(test_k_values)} points\nMin K={k_values[min_ttt_idx]}\nTTT range: {min(ttt_values):.2f} - {max(ttt_values):.2f}',
+    plt.text(0.8, 0.8, f'K tested: {len(test_k_values)} points\nMin K={k_values[min_ttt_idx]}\nTTT range: {min(ttt_values):.2f} - {max(ttt_values):.2f}',
              transform=plt.gca().transAxes, verticalalignment='top',
              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=10)
     

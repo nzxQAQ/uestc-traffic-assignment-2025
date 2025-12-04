@@ -401,13 +401,20 @@ def Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
     }
 ```
 
-
-
 #strong[增量分配（IA）算法特性与局限性]
 
-优点：相比 全有全无（AON），增量分配（IA）能部分捕捉拥堵效应，结果更接近现实；实现简单，仅需在 AON 基础上增加外层循环。当 K→∞ 时，增量分配（IA）理论上趋近于用户均衡解；在本项目中，取 K=30 就已能获得较均衡的流量分布。
+优点：相比 全有全无（AON），增量分配（IA）能部分捕捉拥堵效应，结果更接近现实；实现简单，仅需在 AON 基础上增加外层循环。
+
+当 K→∞ 时，增量分配（IA）理论上趋近于用户均衡解。在本项目中，取 K=30 其实就已能获得较均衡的解，随着K的增大，结果会更加收敛于用户均衡(UE)解。
 
 局限：仍为启发式方法，不保证满足 Wardrop 第一原理；最终解依赖于 K 的取值和加载顺序（本实现为均匀顺序加载）。
+
+#figure(
+  image("../images/IA K-TTT.png", width: 100%),
+  caption: [
+    探究分割数K对解的收敛性的影响
+  ],
+)
 
 #strong[7.基于Frank-Wolfe算法的用户均衡分配（`FW.py`）]
 
@@ -464,7 +471,7 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
 
 #strong[算法优势与理论保证]
 
-- 理论完备性：项目指定的阻抗函数所对应的 Beckmann 函数严格凸且光滑，FW 算法全局可收敛至唯一 UE 解；
+- 理论完备性：项目指定的阻抗函数所对应的 Beckmann 函数严格凸且光滑，FW 算法全局可收敛至用户均衡(UE)解；
 - 计算高效性：使用Newton 法搜索最优步长，适用于大规模网络；
 - 精度可控：通过迭代精度 $epsilon$ 判断收敛，平衡计算成本与解的质量。
 
@@ -520,7 +527,7 @@ G to F: G → D → E → F
 由于不考虑拥堵，所以流量对行程时间没有影响，所有路段上的行程时间均为自由流行程时间t0。下面是路网可视化结果。
 
 #figure(
-  image("../result/t0.png", width: 100%),
+  image("../images/不考虑拥堵时，每个路段上的行程时间恒为自由流时间_t0.png", width: 100%),
   caption: [
     不考虑拥堵时，仅展示各路段上的自由流行程时间t0
   ],
@@ -583,7 +590,7 @@ G to F: G → D → E → F
 下面是路网可视化结果。
 
 #figure(
-  image("../result/FW.png", width: 100%),
+  image("../images/考虑所有_OD_对，Frank-Wolfe_算法分配结果.png", width: 100%),
   caption: [
     考虑拥堵，且使用 FW 分配后的流量作为“已知流量”，展示各路段的行程时间t
   ],
@@ -617,9 +624,9 @@ fw_single_res = Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_
 ```
 运行main.py后，可视化结果如图：
 #figure(
-  image("../result/AON only AtoF.png", width: 100%),
+  image("../images/仅考虑_A→F_时，全有全无_AON_分配结果.png", width: 100%),
   caption: [
-    只考虑A到F的交通需求，使用AON算法的分配结果
+    只考虑A到F的交通需求，使用全有全无 AON 算法的分配结果
   ],
 )
 我们可以看到，A到F之间只有一条路径 A → B → C → E → F 被使用
@@ -631,21 +638,21 @@ fw_single_res = Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_
 比 A → B → C → E → F 的行程时间1.49 + 0.60 + 0.60 + 1.49 = 4.04小时更快。
 
 #figure(
-  image("../result/IA only AtoF K=3.png", width: 100%),
+  image("../images/仅考虑_A→F_时，增量分配_IA_分配结果(K_=_3).png", width: 100%),
   caption: [
-    只考虑A到F的交通需求，使用IA算法的分配结果(K=3)
+    只考虑A到F的交通需求，使用增量分配 IA 的分配结果(K=3)
   ],
 )
 
 #figure(
-  image("../result/IA only AtoF K=1000.png", width: 100%),
+  image("../images/仅考虑_A→F_时，增量分配_IA_分配结果(K_=_1000).png", width: 100%),
   caption: [
-    只考虑A到F的交通需求，使用IA算法的分配结果(K=1000)
+    只考虑A到F的交通需求，使用增量分配 IA 的分配结果(K=1000)
   ],
 )
 
 #figure(
-  image("../result/FW only AtoF.png", width: 100%),
+  image("../images/仅考虑_A→F_时，Frank-Wolfe_算法分配结果.png", width: 100%),
   caption: [
     只考虑A到F的交通需求，使用FW算法的分配结果
   ],
@@ -659,3 +666,31 @@ fw_single_res = Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_
 - 此时路网处于*平衡状态*，出行者无法通过单方面改变路径来缩短行程时间，符合Wardrop第一原理！
 
 #problem[考虑所有起迄点对的交通需求，各路段的流量是多少，所有出行者的总出行时间是多少？]
+
+#figure(
+  image("../images/考虑所有_OD_对，全有全无_AON_分配结果.png", width: 100%),
+  caption: [
+    考虑所有OD对，全有全无 AON 分配结果
+  ],
+)
+
+#figure(
+  image("../images/考虑所有_OD_对，增量分配_IA_分配结果(K_=_3).png", width: 100%),
+  caption: [
+    考虑所有OD对，增量分配 IA 分配结果(K=3)
+  ],
+)
+
+#figure(
+  image("../images/考虑所有_OD_对，增量分配_IA_分配结果(K_=_1000).png", width: 100%),
+  caption: [
+    考虑所有OD对，增量分配 IA 分配结果(K=1000)
+  ],
+)
+
+#figure(
+  image("../images/考虑所有_OD_对，Frank-Wolfe_算法分配结果.png", width: 100%),
+  caption: [
+    考虑所有OD对，Frank-Wolfe 算法分配结果
+  ],
+)
