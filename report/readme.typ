@@ -1,12 +1,12 @@
 #import "./lib.typ": *
 #show: project.with(
-  title: "《交通规划原理》课程报告",
+  title: "电子科技大学《交通规划原理》课程报告",
   author: "倪子煊2023091203002",
   date: auto,
-  // abstract: [
-  //   摘要内容...
-  // ],
-  // keywords: ("关键词1", "关键词2")
+  abstract: [
+    本文针对《交通规划原理》课程要求，设计并实现了一套交通分配计算软件，支持全有全无（AON）、增量分配（IA）与 Frank-Wolfe 用户均衡（FW）三种算法。软件基于 Python 开发，采用模块化架构，实现了路网与需求数据解析、交通分配计算、结果定量评估（总出行时间 TTT）及可视化功能。通过对给定测试路网在单OD对与全OD矩阵场景下的实验，验证了各算法特性：AON 忽略拥堵导致非均衡解；IA 通过分批加载逼近均衡，其精度受分割数 $K$ 影响；FW 算法严格收敛至用户均衡状态。本工作不仅满足课程全部功能要求，也为理解 Wardrop 均衡原理提供了实践基础。
+  ],
+  keywords: ("交通分配", "路阻函数", "全有全无分配", "增量分配", "用户均衡", "Frank-Wolfe算法"),
 )
 
 = 交通分配问题的背景与意义
@@ -62,24 +62,24 @@ $ t_a = t_0 [1 + α (q_a / c_a)^β] $
 #strong[（4）交通分配算法模块（`AON.py`, `IA.py`, `FW.py`）]
 
 该模块实现了三种具有代表性的分配策略，均遵循统一输出接口：
-全有全无分配（AON）：基于自由流阻抗 $t_0$ 执行一次AON分配，忽略流量对阻抗的反馈；
+- 全有全无分配（AON）：只执行一次AON分配，忽略流量对阻抗的反馈；
 - 增量分配（IA）：将总OD需求等分为 $K$ 份，逐次执行AON分配并累加流量，每次分配前更新路段阻抗，逐步逼近均衡状态；
 - Frank-Wolfe用户均衡分配（FW）：以AON结果为初始解，迭代执行“阻抗更新 → AON方向搜索 → 步长优化 → 解更新 → 收敛检验”五步流程，直至满足预设精度 $epsilon$，理论上可收敛至Wardrop用户均衡解。
 
 #strong[（5）可视化模块（`visualize_network.py`）]
 
-该模块将抽象的分配结果转化为直观的空间图形：
-- 接收NetworkX有向图 $G$（边属性含流量 $Q$ 与行程时间 $T$）、节点坐标字典 `pos_dict` 及总出行时间 `TTT`；
-- 采用对数缩放策略映射流量至线宽，Viridis色谱映射流量至颜色，增强视觉辨识度；
+该模块将抽象的分配结果转化为直观的图片：
+- 根据分配结果`res`，构建NetworkX有向图 $G$（边属性含流量 $Q$ 与行程时间 $T$）；
+- 采用对数缩放策略映射流量至线宽，Blues色谱映射流量至颜色，增强视觉辨识度；
 - 在每条边上叠加三行标签（路段标识、流量 $q$、行程时间 $t$），并通过垂直偏移避免双向边标签重叠；
 - 绘制带色标的路网图，并在图中嵌入TTT数值框，实现结果的一站式呈现。
 
 #strong[（6）主程序（`main.py`）]
 
 作为系统入口，该模块整合前述功能，系统性验证课程要求的各项能力：
-- 分别在自由流与拥堵状态下查询任意OD对的最短路径；
+- 分别在自由流与拥堵状态下查询任意两点间的最快路径；
 - 针对单一OD对（如A→F）执行FW均衡分配，分析多路径使用情况；
-- 对全网OD需求，对比AON、IA与FW三种算法的路段流量分布与TTT指标；
+- 对全网OD需求，对比AON、IA与FW三种算法的路段流量分布与所有出行者的总行程时间TTT指标；
 - 自动调用可视化模块生成结果图示，辅助分析与展示。
 
 #summary[上述模块化架构有效实现了算法逻辑、数据处理与可视化展示的解耦，不仅提升了代码的可读性与可维护性，也为未来引入更复杂模型（如SUE或动态分配）预留了良好的扩展接口。]
@@ -105,16 +105,14 @@ $ t_a = t_0 [1 + α (q_a / c_a)^β] $
 
 https://github.com/nzxQAQ/uestc-traffic-assignment-2025.git
 
-可通过以下命令快速部署并运行本软件：
+可通过以下命令快速部署本软件：
 ```bash
-git clone https://github.com/nzxQAQ/uestc-traffic-assignment-2025.git
-cd uestc-traffic-assignment-2025
 pip install -r requirements.txt
 python main.py
 ```
 
 = 关键算法代码片段
-为确保算法实现的透明性与可复现性，本节选取若干核心函数进行展示与说明。所有代码均采用Python语言编写，注重可读性与模块化设计。但受限于篇幅，部分函数会以伪代码或者省略号替代，完整代码请访问GitHub仓库。
+为确保算法实现的透明性与可复现性，本节选取若干核心函数进行展示与说明。受限于篇幅，部分函数在文中会以伪代码或者省略号替代，完整代码请访问GitHub仓库。
 
 
 #strong[1.最短路径搜索 与 全有全无分配（`assignment_utils.py`）]
@@ -159,7 +157,7 @@ def all_or_nothing_assignment(graph, links, od_demand, link_travel_times):
 
 #strong[2.路阻函数t、总出行时间TTT 以及 Beckmann函数（`calculate.py`）]
 
-本项目采用老师指定的路阻函数，其形式为 $ t = t_0 (1 + q/C)^2 $
+本项目采用指定的路阻函数，其形式为 $ t = t_0 (1 + q/C)^2 $
 
 路阻函数的计算在 `get_link_travel_time` 中实现：
 
@@ -225,7 +223,7 @@ def Beckmann_function(flow_vector, links):
 #strong[收敛速度：牛顿法 vs 二分法]
 
 - 牛顿法：利用目标函数的一阶导数 $phi'(lambda)$ 与二阶导数 $phi''(lambda)$ 构造局部二次近似，在极小值点附近具有#emph[二次收敛性]（quadratic convergence）。这意味着误差平方级下降——例如，若当前误差为 $10^(-2)$，下一步可能降至 $10^(-4)$。
-- 二分法：仅依赖一阶导数的符号变化进行区间缩放，收敛速度为#emph[线性]（linear），每次迭代仅将误差减半。要达到 $10^{-6}$ 精度，通常需约 20 次迭代,而牛顿法往往只需 3-5 次迭代即可达到同等精度。
+- 二分法：仅依赖一阶导数的符号变化进行区间缩放，收敛速度为#emph[线性]（linear），每次迭代仅将误差减半。要达到 $10^(-6)$ 精度，通常需约 20 次迭代,而牛顿法往往只需 3-5 次迭代即可达到同等精度。
 
 在交通分配中，Beckmann 函数是严格凸且无限可微的，完全满足牛顿法快速收敛的前提条件。
 
@@ -285,7 +283,7 @@ def line_search_newton(x, y, links, max_iter=10, tol=1e-8):
 
 本模块的核心任务是将 JSON 数据文件转化为可处理的图结构。其关键设计体现在以下三个方面：
 
-#strong[自由流行程时间 $t_0$ 的推导]
+#strong[4.1自由流行程时间 $t_0$ 的推导]
 
 路段自由流阻抗并非人为设定，而是基于几何与最大限速来计算：
 $ t_0 = l/v_max $
@@ -309,7 +307,7 @@ for i, pair in enumerate(network['links']['between']):
 
 ```
 
-#strong[双向有向边建模]
+#strong[4.2 双向有向边建模]
 
 现实道路通常支持双向通行，因此每条无向路段被显式拆分为两条方向相反的有向边：
 ```python
@@ -331,7 +329,7 @@ links.append({
 
 ```
 
-#strong[图存储结构设计——邻接表]
+#strong[4.3 图存储结构设计——邻接表]
 
 为兼顾空间利用率与访问效率，用邻接表来构建图`graph`：
 
@@ -346,9 +344,7 @@ for idx, link in enumerate(links):
 
 全有全无（All-or-Nothing, AON）分配是交通流分配中最基础的模型，其核心假设为：所有出行者均基于自由流行程时间 $t_0$ 选择最短路径，并将OD对的全部需求一次性加载至该路径上。本模块不仅实现了这一经典方法，还为增量分配（IA）与Frank-Wolfe（FW）算法提供了可复用的基础组件。
 
-#strong[`All_or_Nothing_Traffic_Assignment`模块：]
-
-调用`assignment_utils.py`中的all_or_nothing_assignment，完成一次全有全无分配
+调用`assignment_utils.py`中的`all_or_nothing_assignment()`，完成一次全有全无分配
 ```python
 def All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, od_demand):
     """执行基于自由流时间的全有全无交通分配"""
@@ -368,8 +364,6 @@ def All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, od_demand):
 #strong[6.增量分配（Incremental Assignment, IA）（`IA.py`）]
 
 增量分配（Incremental Assignment, IA）是介于全有全无（AON）与用户均衡（UE）之间的一种启发式方法。其核心思想是：将总OD需求划分为 $K$ 个等份（或者不等份），逐次执行AON分配，并在每次分配前根据当前累积流量更新路段阻抗，从而部分反映交通流与行程时间之间的动态反馈。本模块实现了这一策略，并通过参数 $K$ 控制逼近均衡的精细程度。
-
-#strong[`Incremental_Traffic_Assignment`模块]
 
 ```python
 def Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand, K=1000):
@@ -401,7 +395,7 @@ def Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
     }
 ```
 
-#strong[增量分配（IA）算法特性与局限性]
+#strong[分析：增量分配（IA）算法特性与局限性]
 
 优点：相比 全有全无（AON），增量分配（IA）能部分捕捉拥堵效应，结果更接近现实；实现简单，仅需在 AON 基础上增加外层循环。
 
@@ -413,7 +407,9 @@ def Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
 
 #strong[7.基于Frank-Wolfe算法的用户均衡分配（`FW.py`）]
 
-Frank-Wolfe（FW）算法是求解 Wardrop 用户均衡（User Equilibrium, UE）问题的经典方法。其理论基础是：UE 状态等价于 Beckmann 函数 $Z(q)$ 的全局最小值。本模块严格遵循教材所述迭代流程，结合 Newton-Raphson 精确线搜索，实现了高精度、高效率的均衡分配。
+Frank-Wolfe（FW）算法是求解 Wardrop 用户均衡（User Equilibrium, UE）问题的经典方法。其理论基础是：UE 状态等价于 Beckmann 函数 $Z(q)$ 的全局最小值。
+
+本模块严格遵循教材所述迭代流程，结合 Newton-Raphson 精确线搜索，实现了高精度、高效率的均衡分配。
 
 ```python
 def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand, max_iter=500, epsilon=1e-6, verbose=False):
@@ -447,7 +443,7 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
         # 更新迭代起点
         x = x_new
 
-    # 主循环结束，计算最终结果
+    # 主循环结束，计算结果
     final_TTT = get_total_travel_time(x, links)
     final_Beckmann_value = Beckmann_function(x, links)
 
@@ -470,9 +466,12 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
 - 计算高效性：使用Newton 法搜索最优步长，适用于大规模网络；
 - 精度可控：通过迭代精度 $epsilon$ 判断收敛，平衡计算成本与解的质量。
 
-= 测试结果
+= 测试结果与分析
+为测试软件，本项目包含一个测试场景，其路网结构`network.json`和交通需求`demand.json`
+
 #problem[不考虑拥堵，任意两点间的最快的路径是什么？]
 这个问题其实是为了验证我们的Dijkstra算法是否正确。
+
 运行main.py后，可以看到控制台打印了任意两点间的最快路径：（注：如果有多条路径时间相等，仅打印其中一条）
 ```python
 A to B: A → B
@@ -522,26 +521,28 @@ G to F: G → D → E → F
 由于不考虑拥堵，所以流量对行程时间没有影响，所有路段上的行程时间均为自由流行程时间t0。下面是路网可视化结果。
 
 #figure(
-  image("../images/不考虑拥堵时，每个路段上的行程时间恒为自由流时间_t0.png", width: 100%),
+  image("../images/不考虑拥堵时，每个路段上的行程时间恒为自由流时间_t0.png", width: 90%),
   caption: [
     不考虑拥堵时，仅展示各路段上的自由流行程时间t0
   ],
 )
 
-我们注意到一个有意思的细节：明明BE之间有直接连接的道路，但是BE之间的最快路径却是B→C→E。
+值得注意的是：明明BE之间有直接连接的道路，但是BE之间的最快路径却是B→C→E。
 
 这是因为BC与CE道路上的限速为60，而BE上的限速为30。
 
-换言之：BC与CE是“快车道”！因此实际计算后发现
-
+实际计算后发现:
 - B→C→E 的行程时间为0.17+0.17=0.34小时，
 - B→E的行程时间为0.47小时
+换言之：BC与CE是“快车道”！
 
 #problem[假设各路段流量已知，考虑拥堵效应，任意两点之间的最快路径是什么？]
-问题2在问题1的基础上，进一步验证我们的行程时间函数函数是否正确实现。
+问题2在问题1的基础上，进一步验证我们的行程时间函数函数是否正确实现。为了回答这个问题，我们使用 FW 分配后的流量作为“已知流量”。
 
-为了回答这个问题，我们使用 FW 分配后的流量作为“已知流量”。
+#strong[2.1 控制台打印结果]
+
 运行main.py后，可以看到控制台打印了任意两点间最快的路径：
+
 ```python
 A to B: A → B
 A to C: A → B → C
@@ -587,16 +588,16 @@ G to E: G → D → E
 G to F: G → D → E → F
 ```
 
-下面是路网可视化结果。
+#strong[2.2 路网可视化结果]
 
 #figure(
-  image("../images/考虑所有_OD_对，Frank-Wolfe_算法分配结果.png", width: 100%),
+  image("../images/考虑所有_OD_对，Frank-Wolfe_算法分配结果.png", width: 90%),
   caption: [
     考虑拥堵，且使用 FW 分配后的流量作为“已知流量”，展示各路段的行程时间t
   ],
 )
 
-我们注意到一个有意思的细节：在问题1中，D到C之间的最快路径是D → B → C 和 D → E → C，行程时间均为0.33+0.17= 0.5小时。
+值得注意的是：在问题1中，D到C之间的最快路径是D → B → C 和 D → E → C，行程时间均为0.33+0.17= 0.5小时。
 
 而在问题2中，程序打印的D到C之间最速的路径只剩下了D → E → C。
 
@@ -604,31 +605,19 @@ G to F: G → D → E → F
 
 而D → E → C上的行程时间 = 0.54 + 0.26 = 0.8小时
 
-这个小细节验证了我们的程序正确考虑了拥堵效应，实现了对行程时间函数函数的正确计算，并能够正确回答问题2。
+这个细节验证了我们的程序正确考虑了拥堵效应，实现了对行程时间函数函数的正确计算，并能够正确回答问题2。
 
 #problem[只考虑一个起迄点对的交通需求，例如A到F,各路段上的流量是多少？有多少被使用的路径？这些路径上的行程时间是否相等？]
 
 为了回答这个问题，我们构造了仅含A到F的OD需求，并分别使用AON、IA（K=3、K=1000）与FW算法进行分配。
-```python
-# 构造仅含 A→F 的需求字典
-single_od = {('A', 'F'): 2000}
 
-# 执行 AON 分配（仅此 single_od）
-aon_single_res = All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, single_od)
 
-# 执行 IA 分配（仅此 single_od）
-ia_single_res = Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, single_od, 1000)
-
-# 执行 FW 分配（仅此 single_od）
-fw_single_res = Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, single_od)
-```
-
-#strong[1.全有全无（AON）算法分析]
+#strong[3.1 全有全无（AON）算法分析]
 
 为深入理解不同交通分配模型在单一 OD 对下的行为差异，我们以 A→F 的 2000 辆车需求为例，应用全有全无（All-or-Nothing, AON）并通过可视化结果揭示其路径选择特性与系统均衡状态。
 
 #figure(
-  image("../images/仅考虑_A→F_时，全有全无_AON_分配结果.png", width: 100%),
+  image("../images/仅考虑_A→F_时，全有全无_AON_分配结果.png", width: 90%),
   caption: [
     只考虑A到F的交通需求，使用全有全无 AON 算法的分配结果
   ],
@@ -658,12 +647,12 @@ $
   尽管AON算法简单易行，但其在模拟现实复杂路网行为方面存在明显不足，主要用于初步评估或作为复杂算法的基础步骤。
 ]
 
-#strong[2.增量分配（Incremental Assignment, IA）算法分析]
+#strong[3.2 增量分配（Incremental Assignment, IA）算法分析]
 
 为探究增量分配（Incremental Assignment, IA）算法在逼近用户均衡（UE）过程中的行为特征，我们分别设置了两种参数：$K=3$ 和 $K=1000$，并观察其对 A→F 单一 OD 对的分配结果。
 
 #figure(
-  image("../images/仅考虑_A→F_时，增量分配_IA_分配结果(K_=_3).png", width: 100%),
+  image("../images/仅考虑_A→F_时，增量分配_IA_分配结果(K_=_3).png", width: 90%),
   caption: [
     只考虑A到F的交通需求，使用增量分配 IA 的分配结果 ($K=3$)
   ],
@@ -686,7 +675,7 @@ $
 这表明系统*尚未达到平衡状态*，出行者仍有动机从第一条路径转向第二条路径以节省时间。
 
 #figure(
-  image("../images/仅考虑_A→F_时，增量分配_IA_分配结果(K_=_1000).png", width: 100%),
+  image("../images/仅考虑_A→F_时，增量分配_IA_分配结果(K_=_1000).png", width: 90%),
   caption: [
     只考虑A到F的交通需求，使用增量分配 IA 的分配结果 ($K=1000$)
   ],
@@ -695,15 +684,10 @@ $
 当 $K=1000$ 时：
 - 需求被细分为 1000 批，每批仅 2 辆车；
 - 每次加载前均根据当前累积流量更新路段阻抗，模拟了“连续感知”过程；
-- 最终结果中，三条路径均被启用：
-  - A → B → C → E → F：流量 1586.00 辆；
-  - A → B → E → F：流量 380.00 辆；
-  - A → B → D → E → F：流量 34.00 辆；
-
-此时各路径行程时间趋于一致：
-- A → B → C → E → F：$1.49 + 0.35 + 0.35 + 1.49 = 4.04$ 小时；
-- A → B → E → F：$1.49 + 0.69 + 1.49 = 4.03$ 小时；
-- A → B → D → E → F：$1.49 + 0.35 + 0.35 + 1.49 = 4.04$ 小时；
+- 最终结果中，三条路径均被启用，此时各路径行程时间趋于一致：
+  - A → B → C → E → F：$1.49 + 0.35 + 0.35 + 1.49 = 4.04$ 小时；
+  - A → B → E → F：$1.49 + 0.69 + 1.49 = 4.03$ 小时；
+  - A → B → D → E → F：$1.49 + 0.35 + 0.35 + 1.49 = 4.04$ 小时；
 
 在可接受的计算误差范围内，三条路径的行程时间基本相等，且总出行时间 TTT = 7325.76 veh·h，与后面的 FW 算法结果（7325.86 veh·h）高度接近。
 
@@ -711,18 +695,18 @@ $
   由此可见，增量分配算法通过将总需求分批加载并动态更新阻抗，实现了对用户均衡的逐步逼近。当 $K$ 足够大时，IA 结果能有效捕捉出行者的路径选择行为，使各被使用路径的行程时间趋于相等，从而满足 Wardrop 第一原理。该过程直观展示了“拥堵反馈如何引导路径均衡”，是理解交通分配模型演化的关键案例。
 ]
 
-#strong[3.Frank-Wolfe 算法分析]
+#strong[3.3 Frank-Wolfe 算法分析]
 
 Frank-Wolfe 算法通过迭代优化 Beckmann 函数，最终收敛至用户均衡解。
 
 #figure(
-  image("../images/仅考虑_A→F_时，Frank-Wolfe_算法分配结果.png", width: 100%),
+  image("../images/仅考虑_A→F_时，Frank-Wolfe_算法分配结果.png", width: 90%),
   caption: [
     只考虑A到F的交通需求，使用FW算法的分配结果
   ],
 )
 
-我们可以看到，A到F之间有三条路径被使用，分别是：
+结果表明，A到F之间有三条路径被使用，分别是：
 - 路径1：A → B → C → E → F，行程时间为1.49+0.35+0.35+1.49=4.04小时
 - 路径2：A → B → E → F，行程时间为1.49+0.69+1.49=4.03小时
 - 路径3：A → B → D → E → F，行程时间为1.49+0.35+0.35+1.49=4.04小时
@@ -741,55 +725,56 @@ Frank-Wolfe 算法通过迭代优化 Beckmann 函数，最终收敛至用户均�
 
 在实际城市路网中，交通需求通常来自多个起讫点对（OD pairs）。为全面评估不同分配算法在复杂网络环境下的表现，我们引入完整的 OD 需求矩阵，并分别应用全有全无（AON）、增量分配（IA）与 Frank-Wolfe（FW）算法进行交通分配。通过对比各算法结果，探究其在系统总出行时间（Total Travel Time, TTT）和流量分布上的差异。
 
-#strong[1. 全有全无（AON）算法结果分析]
+#strong[4.1 全有全无（AON）算法结果分析]
 
 #figure(
-  image("../images/考虑所有_OD_对，全有全无_AON_分配结果.png", width: 100%),
+  image("../images/考虑所有_OD_对，全有全无_AON_分配结果.png", width: 90%),
   caption: [
     考虑所有OD对，全有全无 AON 分配结果
   ],
 )
 
 在 AON 分配下，所有出行者基于自由流行程时间 $t_0$ 选择最短路径，导致路径高度集中：
-- *关键瓶颈*：B→C 和 C→E 段流量均达 2000 辆，B→C→E 行程时间为 0.40+0.40 = 0.80 h，高于B→E的 0.47 h；
-- *未被使用路径*：如 B→E、E→B 等替代路径流量为零，说明系统未实现路径分流；
+- *关键瓶颈*：B→C 和 C→E 段流量均达 2000 辆，B→C→E 行程时间为 0.40+0.40 = 0.80 h，高于B→E的 0.47 h；而 B→E、E→B 路径流量为零，说明系统未实现路径分流；
 - *系统性能*：总出行时间（TTT）为  23129.63 veh·h 。
 
 由于 AON 忽略拥堵反馈，部分路径仍存在“可节省时间”的机会，例如从 A→B→E→F 可比当前路径更快，因此该解处于非均衡状态。
 
-#strong[2. 增量分配（IA）算法结果分析]
+#strong[4.2 增量分配（IA）算法结果分析]
 
 IA 算法通过将总需求分批加载并动态更新阻抗，逐步逼近用户均衡。
 
 #figure(
-  image("../images/考虑所有_OD_对，增量分配_IA_分配结果(K_=_3).png", width: 100%),
+  image("../images/考虑所有_OD_对，增量分配_IA_分配结果(K_=_3).png", width: 90%),
   caption: [
     考虑所有OD对，增量分配 IA 分配结果(K=3)
   ],
 )
 
-当 $K=3$ 时：
+*当 $K=3$ 时：*
 - 流量开始向替代路径转移，如 B→E 流量增至 666.67 辆；
 - B→C 与 C→E 段流量下降至约 1333 辆，阻抗降低；
 - TTT 下降至 22941.26，较 AON 优化约 0.8%。
 
+
 #figure(
-  image("../images/考虑所有_OD_对，增量分配_IA_分配结果(K_=_1000).png", width: 100%),
+  image("../images/考虑所有_OD_对，增量分配_IA_分配结果(K_=_1000).png", width: 90%),
   caption: [
     考虑所有OD对，增量分配 IA 分配结果(K=1000)
   ],
 )
-当 $K=1000$ 时：
+
+*当 $K=1000$ 时：*
 - 所有路径均被启用，包括 B→E、C→B、D→E 等；
 - 流量进一步分散，如 B→C 流量降至 1610 辆，C→E 为 1610 辆；
 - 各路径行程时间趋于平衡，TTT 进一步降至 22890.43 veh·h。
 
-#strong[3. 探究分割数 $K$ 对解的收敛性的影响]
+#strong[4.3 探究分割数 $K$ 对解的收敛性的影响]
 
 为量化 $K$ 对 IA 结果的影响，我们进行了敏感性分析，测试了 $K = 1$ 到 $60$ 的 TTT 变化趋势：
 
 #figure(
-  image("../images/IA K-TTT.png", width: 100%),
+  image("../images/IA K-TTT.png", width: 90%),
   caption: [
     探究分割数K对解的收敛性的影响
   ],
@@ -801,12 +786,12 @@ IA 算法通过将总需求分批加载并动态更新阻抗，逐步逼近用�
 
 该图清晰展示了 IA 算法的“收敛特性”：*并非 $K$ 越大越好*，而是在某个临界点后收益递减。这提示在实际应用中，可选取适中的 $K$（如 50–100）以平衡精度与计算成本。
 
-#strong[4. Frank-Wolfe 算法结果分析]
+#strong[4.4 Frank-Wolfe 算法结果分析]
 
 FW 算法作为用户均衡的严格求解器，其结果代表了理论最优解：
 
 #figure(
-  image("../images/考虑所有_OD_对，Frank-Wolfe_算法分配结果.png", width: 100%),
+  image("../images/考虑所有_OD_对，Frank-Wolfe_算法分配结果.png", width: 90%),
   caption: [
     考虑所有OD对，Frank-Wolfe 算法分配结果
   ],
