@@ -40,7 +40,7 @@ def All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, od_demand):
     }
 
 # ----------------------------
-# 主程序入口
+# 测试入口
 # ----------------------------
 if __name__ == '__main__':
     network_file='data/network.json'
