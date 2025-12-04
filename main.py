@@ -1,12 +1,11 @@
 # main.py
-from visualize_network import visualize_network
-import networkx as nx
 from data_load import load_network_and_demand, build_graph_and_links
 from assignment_utils import dijkstra_shortest_path
 from calculate import get_link_travel_time
 from AON import All_or_Nothing_Traffic_Assignment
 from IA import Incremental_Traffic_Assignment
 from FW import Frank_Wolfe_Traffic_Assignment
+from visualize_network import visualize_network, build_network
 
 def print_path(links, path_link_indices):
     """将路径的 link 索引列表转换为节点序列"""
@@ -61,14 +60,7 @@ def main():
     aon_zero_res = All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, zero_od)
     # 可视化
     try:
-        G = nx.DiGraph()
-        for node in aon_zero_res['node_names']:
-            G.add_node(node)
-        for i, link in enumerate(aon_zero_res['links']):
-            u, v = link['from'], link['to']
-            q = aon_zero_res['flow'][i]
-            t = get_link_travel_time(aon_zero_res['flow'], i, aon_zero_res['links'])
-            G.add_edge(u, v, Q=q, T=t)
+        G = build_network(aon_zero_res)
         visualize_network(G, aon_zero_res['pos'], TTT=aon_zero_res['total_travel_time'], 
                         title="不考虑拥堵时，仅展示自由流t0")
     except ImportError:
@@ -107,16 +99,7 @@ def main():
 
     # 可视化
     try:
-        G = nx.DiGraph()
-        for node in fw_single_res['node_names']:
-            G.add_node(node)
-        
-        for i, link in enumerate(fw_single_res['links']):
-            u, v = link['from'], link['to']
-            q = fw_single_res['flow'][i]
-            t = get_link_travel_time(fw_single_res['flow'], i, fw_single_res['links'])
-            G.add_edge(u, v, Q=q, T=t)
-        
+        G = build_network(fw_single_res)
         visualize_network(G, fw_single_res['pos'], TTT=fw_single_res['total_travel_time'],
                         title="Frank-Wolfe 算法，仅考虑 A→F 时的分配结果")
     except ImportError:
@@ -133,7 +116,7 @@ def main():
     K = 1000
     ia_res = Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand, K)
     # FW
-    fw_res = fw_result  # 已计算
+    fw_res = Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand)  
 
     methods = [
         ("全有全无 (AON)", aon_res),
@@ -151,45 +134,16 @@ def main():
         print(f"  总出行时间 (TTT): {res['total_travel_time']:.2f} veh·h")
 
     try:
-        G = nx.DiGraph()
-        for node in aon_res['node_names']:
-            G.add_node(node)
-        for i, link in enumerate(aon_res['links']):
-            u, v = link['from'], link['to']
-            q = aon_res['flow'][i]
-            t = get_link_travel_time(aon_res['flow'], i, aon_res['links'])
-            G.add_edge(u, v, Q=q, T=t)
+        G = build_network(aon_res)
         visualize_network(G, aon_res['pos'], TTT=aon_res['total_travel_time'], 
                         title="全有全无 AON 分配结果")
-    except ImportError:
-        print("可视化不可用。跳过该步骤")
-    
-    IA_title=f"增量分配 IA 分配结果(K = {K})" 
-    try:
-        G = nx.DiGraph()
-        for node in ia_res['node_names']:
-            G.add_node(node)
-        for i, link in enumerate(ia_res['links']):
-            u, v = link['from'], link['to']
-            q = ia_res['flow'][i]
-            t = get_link_travel_time(ia_res['flow'], i, ia_res['links'])
-            G.add_edge(u, v, Q=q, T=t)
+        
+        IA_title=f"增量分配 IA 分配结果(K = {K})" 
+        G = build_network(ia_res)
         visualize_network(G, ia_res['pos'], TTT=ia_res['total_travel_time'], 
                         title=IA_title)
-    except ImportError:
-        print("可视化不可用。跳过该步骤")
 
-    try:
-        G = nx.DiGraph()
-        for node in fw_res['node_names']:
-            G.add_node(node)
-        
-        for i, link in enumerate(fw_res['links']):
-            u, v = link['from'], link['to']
-            q = fw_res['flow'][i]
-            t = get_link_travel_time(fw_res['flow'], i, fw_res['links'])
-            G.add_edge(u, v, Q=q, T=t)
-        
+        G = build_network(fw_res)
         visualize_network(G, fw_res['pos'], TTT=fw_res['total_travel_time'],
                         title="Frank-Wolfe 算法分配结果")
     except ImportError:

@@ -117,7 +117,7 @@ python main.py
 为确保算法实现的透明性与可复现性，本节选取若干核心函数进行展示与说明。所有代码均采用Python语言编写，注重可读性与模块化设计。但受限于篇幅，部分函数会以伪代码或者省略号替代，完整代码请访问GitHub仓库。
 
 
-#strong[1. 最短路径搜索与全有全无分配（`assignment_utils.py`）]
+#strong[1.最短路径搜索 与 全有全无分配（`assignment_utils.py`）]
 
 Dijkstra算法是求解最短路径的基础。本模块实现返回路径上的边索引列表，便于后续流量累加：
 
@@ -139,7 +139,7 @@ def dijkstra_shortest_path(graph, links, origin, dest, link_travel_times):
     return path_links
 ```
 
-`all_or_nothing_assignment` 函数则遍历所有OD对，调用上述最短路径函数，完成一次完整的AON分配：
+`all_or_nothing_assignment` 函数则遍历所有OD对，调用上述最短路径函数，完成一次完整的全有全无分配：
 
 ```python
 def all_or_nothing_assignment(graph, links, od_demand, link_travel_times):
@@ -157,7 +157,7 @@ def all_or_nothing_assignment(graph, links, od_demand, link_travel_times):
     return y
 ```
 
-#strong[2. 路阻函数t、总出行时间TTT 以及 Beckmann函数（`calculate.py`）]
+#strong[2.路阻函数t、总出行时间TTT 以及 Beckmann函数（`calculate.py`）]
 
 本项目采用老师指定的路阻函数，其形式为 $ t = t_0 (1 + q/C)^2 $
 
@@ -216,13 +216,13 @@ def Beckmann_function(flow_vector, links):
         total += t0 * (q + (q ** 2) / C + (q ** 3) / (3 * C ** 2))
     return total
 ```
-#strong[3. 最优步长求解：Newton-Raphson 精确线搜索（`calculate.py`）]
+#strong[3.最优步长求解：Newton-Raphson 精确搜索（`calculate.py`）]
 
 在 Frank-Wolfe 算法中，每一步迭代需确定最优步长 $lambda in [0,1]$，以最小化 Beckmann 函数 $Z(q)$ 沿当前搜索方向（即从当前解 $x$ 指向 AON 解 $y$ 的方向）的值。
 
 教材中常采用#strong[二分法]（Bisection Method）求解该一维优化问题，而本项目则采用#strong[牛顿-拉弗森法]（Newton-Raphson Method）实现高精度线搜索，后者在本场景下具有显著优势，主要体现在以下三方面：
 
-#strong[收敛速度：牛顿法 vs. 二分法]
+#strong[收敛速度：牛顿法 vs 二分法]
 
 - 牛顿法：利用目标函数的一阶导数 $phi'(lambda)$ 与二阶导数 $phi''(lambda)$ 构造局部二次近似，在极小值点附近具有#emph[二次收敛性]（quadratic convergence）。这意味着误差平方级下降——例如，若当前误差为 $10^(-2)$，下一步可能降至 $10^(-4)$。
 - 二分法：仅依赖一阶导数的符号变化进行区间缩放，收敛速度为#emph[线性]（linear），每次迭代仅将误差减半。要达到 $10^{-6}$ 精度，通常需约 20 次迭代,而牛顿法往往只需 3-5 次迭代即可达到同等精度。
@@ -314,8 +314,7 @@ for i, pair in enumerate(network['links']['between']):
 现实道路通常支持双向通行，因此每条无向路段被显式拆分为两条方向相反的有向边：
 ```python
 links.append({
-    'from': u,
-    'to': v,
+    'from': u,'to': v,
     'length': length,
     'capacity': capacity,
     'speedmax': speedmax,
@@ -323,8 +322,7 @@ links.append({
 })
 
 links.append({
-    'from': v,
-    'to': u,
+    'from': v,'to': u,
     'length': length,
     'capacity': capacity,
     'speedmax': speedmax,
@@ -333,9 +331,9 @@ links.append({
 
 ```
 
-#strong[邻接表设计]
+#strong[图存储结构设计——邻接表]
 
-为兼顾算法效率与结果可解释性，用邻接表来构建图`graph`：
+为兼顾空间利用率与访问效率，用邻接表来构建图`graph`：
 
 ```python
 # 构建邻接表
@@ -344,4 +342,134 @@ for idx, link in enumerate(links):
     graph[link['from']].append((link['to'], idx))
 ```
 
+#strong[5.全有全无（All-or-Nothing, AON）交通分配（`AON.py`）]
 
+全有全无（All-or-Nothing, AON）分配是交通流分配中最基础的模型，其核心假设为：所有出行者均基于自由流行程时间 $t_0$ 选择最短路径，并将OD对的全部需求一次性加载至该路径上。本模块不仅实现了这一经典方法，还为增量分配（IA）与Frank-Wolfe（FW）算法提供了可复用的基础组件。
+
+#strong[`All_or_Nothing_Traffic_Assignment`模块：]
+
+调用`assignment_utils.py`中的all_or_nothing_assignment，完成一次全有全无分配
+```python
+def All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, od_demand):
+    """执行基于自由流时间的全有全无交通分配"""
+    free_flow_tt = [link['t0'] for link in links]
+    flow_aon = all_or_nothing_assignment(graph, links, od_demand, free_flow_tt)
+    TTT_aon = get_total_travel_time(flow_aon, links)
+    return {
+        'flow': flow_aon,
+        'total_travel_time': TTT_aon,
+        'graph': graph,
+        'links': links,
+        'pos': pos,
+        'node_names': node_names
+    }
+```
+
+#strong[6.增量分配（Incremental Assignment, IA）（`IA.py`）]
+
+增量分配（Incremental Assignment, IA）是介于全有全无（AON）与用户均衡（UE）之间的一种启发式方法。其核心思想是：将总OD需求划分为 $K$ 个等份（或者不等份），逐次执行AON分配，并在每次分配前根据当前累积流量更新路段阻抗，从而部分反映交通流与行程时间之间的动态反馈。本模块实现了这一策略，并通过参数 $K$ 控制逼近均衡的精细程度。
+
+#strong[`Incremental_Traffic_Assignment`模块]
+
+```python
+def Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand, K=1000):
+    # 将总OD需求划分为 K 个等份
+    step_demand = {od: amt / K for od, amt in od_demand.items()}
+
+    # 初始化零流量
+    x = [0.0] * n_links
+
+    for k in range(1, K + 1):
+        # 基于当前流量 x 计算实时行程时间
+        t_current = [get_link_travel_time(x, i, links) for i in range(len(links))]
+
+        # 执行一次 AON 分配当前小份需求
+        y_k = all_or_nothing_assignment(graph, links, step_demand, t_current)
+
+        # 累加流量
+        x = [x[i] + y_k[i] for i in range(n_links)]
+
+    TTT_inc = get_total_travel_time(x, links)
+    return {
+        'flow': x,
+        'total_travel_time': TTT_inc,
+        'K': K,
+        'graph': graph,
+        'links': links,
+        'pos': pos,
+        'node_names': node_names
+    }
+```
+
+当 K→∞ 时，增量分配（IA）理论上趋近于用户均衡解；实践中取 K=100 就已能获得较平滑的流量分布。
+
+#strong[增量分配（IA）算法特性与局限性]
+
+优点：相比 全有全无（AON），增量分配（IA）能部分捕捉拥堵效应，结果更接近现实；实现简单，仅需在 AON 基础上增加外层循环。
+
+局限：仍为启发式方法，不保证满足 Wardrop 第一原理；最终解依赖于 K 的取值和加载顺序（本实现为均匀顺序加载）。
+
+#strong[7.基于Frank-Wolfe算法的用户均衡分配（`FW.py`）]
+
+Frank-Wolfe（FW）算法是求解 Wardrop 用户均衡（User Equilibrium, UE）问题的经典方法。其理论基础是：UE 状态等价于 Beckmann 函数 $Z(q)$ 的全局最小值。本模块严格遵循教材所述迭代流程，结合 Newton-Raphson 精确线搜索，实现了高精度、高效率的均衡分配。
+
+```python
+def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand, max_iter=500, epsilon=1e-6, verbose=False):
+    # 步骤1: 初始化 —— 自由流下的 AON 分配
+    free_flow_tt = [link['t0'] for link in links]
+    x = all_or_nothing_assignment(graph, links, od_demand, free_flow_tt)
+
+    # 主迭代循环
+    for iteration in range(1, max_iter + 1):
+        # 步骤2: 更新路段阻抗
+        t_current = [get_link_travel_time(x, i, links) for i in range(n_links)]
+
+        # 步骤3: 求解线性主问题（AON方向）
+        y = all_or_nothing_assignment(graph, links, od_demand, t_current)
+
+        # 步骤4: 精确线搜索（Newton法求最优步长 λ）
+        lambda_val = line_search_newton(x, y, links)
+        lambda_val = max(0.0, min(1.0, lambda_val))  # 确保 lambda_val 在 [0,1] 上
+
+        # 步骤5: 确定新的迭代起点
+        x_new = [x[i] + lambda_val * (y[i] - x[i]) for i in range(n_links)]
+
+        # 步骤6: 收敛性检验：convergence_metric < epsilon
+        numerator = sqrt(sum((x_new[i] - x[i])**2 for i in range(n_links)))
+        denominator = sum(x)
+        convergence_metric = numerator / denominator if denominator > 1e-12 else float('inf')
+
+        if convergence_metric < epsilon:
+            break
+
+        # 更新迭代起点
+        x = x_new
+
+    # 主循环结束，计算最终结果
+    final_TTT = get_total_travel_time(x, links)
+    final_Beckmann_value = Beckmann_function(x, links)
+
+    return {
+            'flow': x,
+            'total_travel_time': final_TTT,
+            'Beckmann_value': final_Beckmann_value,
+            'iterations': iteration,
+            'converged': converged,
+            'graph': graph,
+            'links': links,
+            'pos': pos,
+            'node_names': node_names
+        }
+```
+
+#strong[算法优势与理论保证]
+
+- 理论完备性：项目指定的阻抗函数所对应的 Beckmann 函数严格凸且光滑，FW 算法全局可收敛至唯一 UE 解；
+- 计算高效性：使用Newton 法搜索最优步长，适用于大规模网络；
+- 精度可控：通过迭代精度 $epsilon$ 判断收敛，平衡计算成本与解的质量。
+
+= 测试结果
+#problem[不考虑拥堵，任意两点间的最快的路径是什么？]
+#problem[假设各路段流量已知，考虑拥堵效应，任意两点之间的最快路径是什么？]
+#problem[只考虑一个起迄点对的交通需求，例如A到F,各路段上的流量是多少？有多个最短的路径，最少被使用的路径？这些路径上的行程时间是否相等？]
+#problem[考虑所有起迄点对的交通需求，各路段的流量是多少，所有出行者的总出行时间是多少？]

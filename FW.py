@@ -2,6 +2,8 @@
 from calculate import line_search_newton, get_link_travel_time, Beckmann_function, get_total_travel_time
 from data_load import load_network_and_demand, build_graph_and_links
 from assignment_utils import all_or_nothing_assignment
+from visualize_network import visualize_network, build_network
+from math import sqrt
 # ----------------------------
 # Frank-Wolfe 用户均衡交通分配
 # ----------------------------
@@ -45,11 +47,10 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
         x_new = [x[i] + lambda_val * (y[i] - x[i]) for i in range(n_links)]
         
         # 步骤6: 收敛性检验
-        # 分子: sqrt(sum_a (x_a^{n+1} - x_a^n)^2)
-        numerator = sum((x_new[i] - x[i]) ** 2 for i in range(n_links))
-        numerator = (numerator ** 0.5) if numerator > 0 else 0
+        # 分子: sqrt(sum (x_n+1 - x_n)^2)
+        numerator = sqrt(sum((x_new[i] - x[i])**2 for i in range(n_links)))
         
-        # 分母: sum_a x_a^n
+        # 分母: sum x_n
         denominator = sum(x)
         
         convergence_metric = numerator / denominator if denominator > 1e-12 else float('inf')
@@ -69,7 +70,9 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
             converged = True
             break
         
+        # 更新迭代起点
         x = x_new
+
     else:
         # 达到最大迭代次数仍未收敛
         converged = False
@@ -78,12 +81,12 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
     
     # 计算最终结果
     final_TTT = get_total_travel_time(x, links)
-    final_obj = Beckmann_function(x, links)
+    final_Beckmann_value = Beckmann_function(x, links)
 
     return {
             'flow': x,
             'total_travel_time': final_TTT,
-            'Beckmann_value': final_obj,
+            'Beckmann_value': final_Beckmann_value,
             'iterations': iteration,
             'converged': converged,
             'graph': graph,
@@ -114,6 +117,7 @@ if __name__ == '__main__':
     # 4. 执行 Frank-Wolfe 分配
     FW_result = Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand,verbose=True)
     
+    # 5. 打印结果
     print("\n=== Frank-Wolfe Flows ===")
     for i, link in enumerate(FW_result['links']):
         flow = FW_result['flow'][i]
@@ -123,22 +127,9 @@ if __name__ == '__main__':
     
     print(f"\nTotal Travel Time (FW-TTT): {FW_result['total_travel_time']:.2f} Beckmann_value: {FW_result['Beckmann_value']:.2f} ")
     
-    # 可视化
+    # 6. 可视化
     try:
-        from visualize_network import visualize_network
-        import networkx as nx
-        
-        G = nx.DiGraph()
-        for node in FW_result['node_names']:
-            G.add_node(node)
-        
-        for i, link in enumerate(FW_result['links']):
-            u, v = link['from'], link['to']
-            q = FW_result['flow'][i]
-            t = get_link_travel_time(FW_result['flow'], i, FW_result['links'])
-            G.add_edge(u, v, Q=q, T=t)
-        
-        visualize_network(G, FW_result['pos'], TTT=FW_result['total_travel_time'],
-                        title="Frank-Wolfe Assignment Result")
+        G = build_network(FW_result)
+        visualize_network(G, FW_result['pos'], TTT=FW_result['total_travel_time'], title="Frank-Wolfe Assignment Result")
     except ImportError:
         print("visualize_network not available. Skipping visualization.")

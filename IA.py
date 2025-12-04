@@ -2,6 +2,7 @@
 from calculate import get_link_travel_time, get_total_travel_time
 from data_load import load_network_and_demand, build_graph_and_links
 from assignment_utils import all_or_nothing_assignment
+from visualize_network import visualize_network, build_network
 # ----------------------------
 # 增量交通分配（Incremental Assignment）
 # ----------------------------
@@ -68,11 +69,13 @@ if __name__ == '__main__':
     for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
         od_demand[(o, d)] = od_demand.get((o, d), 0) + amt
     
-    # 将总 OD 需求划分为的份数K，可手动修改
+    # 4. 执行 增量分配(IA)
     K = 1000
     IA_title=f"Incremental Assignment Result(K = {K})"
     
     IA_result = Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand, K=K)
+    
+    # 5. 打印结果
     print("\n=== Incremental Assignment Link Flows ===")
     for i, link in enumerate(IA_result['links']):
         flow = IA_result['flow'][i]
@@ -81,19 +84,9 @@ if __name__ == '__main__':
 
     print(f"\n📊 Total Travel Time (Incremental): {IA_result['total_travel_time']:.2f} veh·h")
 
-    # 可视化
+    # 6. 可视化
     try:
-        from visualize_network import visualize_network
-        import networkx as nx
-        G = nx.DiGraph()
-        for node in IA_result['node_names']:
-            G.add_node(node)
-        for i, link in enumerate(IA_result['links']):
-            u, v = link['from'], link['to']
-            q = IA_result['flow'][i]
-            t = get_link_travel_time(IA_result['flow'], i, IA_result['links'])
-            G.add_edge(u, v, Q=q, T=t)
-        visualize_network(G, IA_result['pos'], TTT=IA_result['total_travel_time'], 
-                        title=IA_title)
+        G = build_network(IA_result)
+        visualize_network(G, IA_result['pos'], TTT=IA_result['total_travel_time'], title=IA_title)
     except ImportError:
         print("visualize_network not available. Skipping visualization.")

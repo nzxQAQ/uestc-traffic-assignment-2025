@@ -2,6 +2,7 @@
 from calculate import get_link_travel_time, get_total_travel_time
 from data_load import load_network_and_demand, build_graph_and_links
 from assignment_utils import all_or_nothing_assignment
+from visualize_network import visualize_network, build_network
 # ----------------------------
 # 全有全无交通分配(AON)  
 # ----------------------------
@@ -57,7 +58,7 @@ if __name__ == '__main__':
     for o, d, amt in zip(demand['from'], demand['to'], demand['amount']):
         od_demand[(o, d)] = od_demand.get((o, d), 0) + amt
     
-    # 4. 执行 全有全无交通分配
+    # 4. 执行 全有全无分配(AON)
     AON_result = All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, od_demand)
 
     # 5. 打印结果
@@ -72,16 +73,7 @@ if __name__ == '__main__':
     
     # 6. 可视化
     try:
-        from visualize_network import visualize_network
-        import networkx as nx
-        G = nx.DiGraph()
-        for node in AON_result['node_names']:
-            G.add_node(node)
-        for i, link in enumerate(AON_result['links']):
-            u, v = link['from'], link['to']
-            q = AON_result['flow'][i]
-            t = get_link_travel_time(AON_result['flow'], i, AON_result['links'])
-            G.add_edge(u, v, Q=q, T=t)
+        G = build_network(AON_result)
         visualize_network(G, AON_result['pos'], TTT=AON_result['total_travel_time'], 
                         title="All-or-Nothing Assignment Result")
     except ImportError:

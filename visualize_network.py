@@ -1,17 +1,23 @@
+from calculate import get_link_travel_time
+import networkx as nx
+import matplotlib.pyplot as plt
+plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'Arial Unicode MS', 'sans-serif']  # 支持中文
+plt.rcParams['axes.unicode_minus'] = False  # 解决负号 '-' 显示为方块的问题
+import numpy as np
+import matplotlib.colors as mcolors
+import matplotlib.cm as cm
+def build_network(res):
+    G = nx.DiGraph()
+    for node in res['node_names']:
+        G.add_node(node)
+    for i, link in enumerate(res['links']):
+        u, v = link['from'], link['to']
+        q = res['flow'][i]
+        t = get_link_travel_time(res['flow'], i, res['links'])
+        G.add_edge(u, v, Q=q, T=t)
+    return G
+
 def visualize_network(G, pos_dict, TTT, title="Traffic Assignment Result"):
-    """
-    可视化网络：绘制网络图，并显示每条边的流量。
-    参数：
-        G: networkx.DiGraph，边需包含 'Q' 属性（流量）
-        pos_dict: dict，节点坐标字典
-    """
-    import matplotlib.pyplot as plt
-    plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'Arial Unicode MS', 'sans-serif']  # 支持中文
-    plt.rcParams['axes.unicode_minus'] = False  # 解决负号 '-' 显示为方块的问题
-    import networkx as nx
-    import numpy as np
-    import matplotlib.colors as mcolors
-    import matplotlib.cm as cm
 
     plt.figure(figsize=(12, 8))
     
@@ -77,7 +83,7 @@ def visualize_network(G, pos_dict, TTT, title="Traffic Assignment Result"):
         alpha=0.9
     )
 
-    # 绘制三行标签：路段名、q、t
+    # 绘制三行标签：路段名 + 流量 + 行程时间
     for i, (u, v) in enumerate(edges):
         q = G[u][v]['Q']
         t = G[u][v]['T']
@@ -114,7 +120,7 @@ def visualize_network(G, pos_dict, TTT, title="Traffic Assignment Result"):
     plt.gca().invert_yaxis()
     plt.title(title, fontsize=14)
     
-    # === 新增：显示 TTT ===
+    # === 显示 TTT ===
     if TTT is not None:
         label_text = (r"Total Travel Time (TTT) = $\sum q \cdot t$ = " + f"{TTT:.2f} veh·h")
 
