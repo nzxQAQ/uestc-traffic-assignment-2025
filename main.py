@@ -1,4 +1,6 @@
 # main.py
+from visualize_network import visualize_network
+import networkx as nx
 from data_load import load_network_and_demand, build_graph_and_links
 from assignment_utils import dijkstra_shortest_path
 from calculate import get_link_travel_time
@@ -59,8 +61,6 @@ def main():
     aon_zero_res = All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, zero_od)
     # 可视化
     try:
-        from visualize_network import visualize_network
-        import networkx as nx
         G = nx.DiGraph()
         for node in aon_zero_res['node_names']:
             G.add_node(node)
@@ -107,9 +107,6 @@ def main():
 
     # 可视化
     try:
-        from visualize_network import visualize_network
-        import networkx as nx
-        
         G = nx.DiGraph()
         for node in fw_single_res['node_names']:
             G.add_node(node)
@@ -121,7 +118,7 @@ def main():
             G.add_edge(u, v, Q=q, T=t)
         
         visualize_network(G, fw_single_res['pos'], TTT=fw_single_res['total_travel_time'],
-                        title="Frank-Wolfe single A→F Assignment Result")
+                        title="Frank-Wolfe 算法，仅考虑 A→F 时的分配结果")
     except ImportError:
         print("可视化不可用。跳过该步骤。")
 
@@ -133,7 +130,8 @@ def main():
     # AON
     aon_res = All_or_Nothing_Traffic_Assignment(links, graph, pos, node_names, od_demand)
     # IA (K=1000)
-    ia_res = Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand, K=1000)
+    K = 1000
+    ia_res = Incremental_Traffic_Assignment(links, graph, pos, node_names, n_links, od_demand, K)
     # FW
     fw_res = fw_result  # 已计算
 
@@ -152,6 +150,51 @@ def main():
             print(f"    {link['from']}→{link['to']}: q={q:6.1f}, t={t:.2f}")
         print(f"  总出行时间 (TTT): {res['total_travel_time']:.2f} veh·h")
 
+    try:
+        G = nx.DiGraph()
+        for node in aon_res['node_names']:
+            G.add_node(node)
+        for i, link in enumerate(aon_res['links']):
+            u, v = link['from'], link['to']
+            q = aon_res['flow'][i]
+            t = get_link_travel_time(aon_res['flow'], i, aon_res['links'])
+            G.add_edge(u, v, Q=q, T=t)
+        visualize_network(G, aon_res['pos'], TTT=aon_res['total_travel_time'], 
+                        title="全有全无 AON 分配结果")
+    except ImportError:
+        print("可视化不可用。跳过该步骤")
+    
+    IA_title=f"增量分配 IA 分配结果(K = {K})" 
+    try:
+        G = nx.DiGraph()
+        for node in ia_res['node_names']:
+            G.add_node(node)
+        for i, link in enumerate(ia_res['links']):
+            u, v = link['from'], link['to']
+            q = ia_res['flow'][i]
+            t = get_link_travel_time(ia_res['flow'], i, ia_res['links'])
+            G.add_edge(u, v, Q=q, T=t)
+        visualize_network(G, ia_res['pos'], TTT=ia_res['total_travel_time'], 
+                        title=IA_title)
+    except ImportError:
+        print("可视化不可用。跳过该步骤")
+
+    try:
+        G = nx.DiGraph()
+        for node in fw_res['node_names']:
+            G.add_node(node)
+        
+        for i, link in enumerate(fw_res['links']):
+            u, v = link['from'], link['to']
+            q = fw_res['flow'][i]
+            t = get_link_travel_time(fw_res['flow'], i, fw_res['links'])
+            G.add_edge(u, v, Q=q, T=t)
+        
+        visualize_network(G, fw_res['pos'], TTT=fw_res['total_travel_time'],
+                        title="Frank-Wolfe 算法分配结果")
+    except ImportError:
+        print("可视化不可用。跳过该步骤。")
+    
     print("\n所有测试问题已完成！")
 
 if __name__ == '__main__':

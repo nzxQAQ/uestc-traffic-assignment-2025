@@ -23,13 +23,15 @@ def build_graph_and_links(network):
 
     # 构建有向边列表
     links = []
-    link_key_to_index = {}
+    
     for i, pair in enumerate(network['links']['between']):
         u, v = pair[0], pair[1]
         length = euclidean_distance(u, v)
         capacity = network['links']['capacity'][i]
         speedmax = network['links']['speedmax'][i]
         t0 = length / speedmax
+        
+        # 分别添加u→v和v→u两条有向边
         links.append({
             'from': u,
             'to': v,
@@ -38,8 +40,6 @@ def build_graph_and_links(network):
             'speedmax': speedmax,
             't0': t0
         })
-        link_key_to_index[(u, v)] = len(links) - 1
-        
         links.append({
             'from': v,
             'to': u,
@@ -48,7 +48,6 @@ def build_graph_and_links(network):
             'speedmax': speedmax,
             't0': t0
         })
-        link_key_to_index[(v, u)] = len(links) - 1
 
     n_links = len(links)
 

@@ -1,4 +1,4 @@
-#import "./lib.typ": *
+#import "report/lib.typ": *
 
 #show: project.with(
   title: "EasyPaper 模板使用示例",

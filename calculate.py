@@ -6,7 +6,7 @@ def get_link_travel_time(flow_vector, link_idx, links):
     return t0 * (1 + (Q / C) ) ** 2
 
 def Beckmann_function(flow_vector, links):
-    """ Beckmann势能函数Z(x)，是对路阻函数的积分"""
+    """ Beckmann函数Z(x)，是对路阻函数的积分"""
     total = 0.0
     for i, q in enumerate(flow_vector):
         C = links[i]['capacity']
@@ -36,7 +36,7 @@ def get_total_travel_time(flow_vector, links):
         total_travel_time += q * t
     return total_travel_time
 
-def line_search_newton(x, y, links, max_iter=20, tol=1e-8):
+def line_search_newton(x, y, links, max_iter=10, tol=1e-8):
     """
     使用 Newton-Raphson 方法精确求解最优步长 alpha ∈ [0, 1]
     利用 phi'(alpha) = sum( (y_i - x_i) * t(q_i(alpha)) )

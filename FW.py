@@ -94,7 +94,7 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
 
 
 # ----------------------------
-# 主程序入口
+# 测试入口
 # ----------------------------
 if __name__ == '__main__':
     network_file='data/network.json'
