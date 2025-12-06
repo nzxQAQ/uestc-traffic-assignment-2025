@@ -92,7 +92,7 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
             'total_travel_time': final_TTT,
             'Beckmann_value': final_Beckmann_value,
             'iterations': iteration,
-            'converged': converged,
+            'converged': converged, # 是否收敛
             'graph': graph,
             'links': links,
             'pos': pos,
