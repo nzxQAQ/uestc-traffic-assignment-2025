@@ -2,7 +2,7 @@
 from calculate import line_search_newton, get_link_travel_time, Beckmann_function, get_total_travel_time
 from data_load import load_network_and_demand, build_graph_and_links
 from assignment_utils import all_or_nothing_assignment
-from visualize_network import visualize_network, build_network
+from visualize_network import visualize_network, build_network, visualize_convergence
 from math import sqrt
 # ----------------------------
 # Frank-Wolfe 用户均衡交通分配
@@ -31,6 +31,8 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
     free_flow_tt = [link['t0'] for link in links]
     x = all_or_nothing_assignment(graph, links, od_demand, free_flow_tt)
     
+    convergence_history = []
+
     # 主循环
     for iteration in range(1, max_iter + 1):
         # 步骤2: 更新各路段的阻抗
@@ -54,6 +56,8 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
         denominator = sum(x)
         
         convergence_metric = numerator / denominator if denominator > 1e-12 else float('inf')
+        
+        convergence_history.append(convergence_metric)
         
         # 打印迭代信息
         if verbose and (iteration % 5 == 0 or iteration <= 5 or convergence_metric < epsilon):
@@ -92,7 +96,8 @@ def Frank_Wolfe_Traffic_Assignment(links, graph, pos, node_names, n_links, od_de
             'graph': graph,
             'links': links,
             'pos': pos,
-            'node_names': node_names
+            'node_names': node_names,
+            'convergence_history': convergence_history
         }
 
 
@@ -133,3 +138,5 @@ if __name__ == '__main__':
         visualize_network(G, FW_result['pos'], TTT=FW_result['total_travel_time'], title="Frank-Wolfe Assignment Result")
     except ImportError:
         print("visualize_network not available. Skipping visualization.")
+
+    visualize_convergence(FW_result, title="Frank-Wolfe Convergence History")

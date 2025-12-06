@@ -217,3 +217,29 @@ def print_path(links, path_link_indices):
         nodes.append(next_node)
         current_node = next_node
     return " → ".join(nodes)
+
+def visualize_convergence(FW_res, title):
+    from matplotlib.ticker import FuncFormatter
+    # 绘制收敛过程
+    plt.figure(figsize=(8, 5))
+    ax = plt.gca()
+    ax.semilogy(range(len(FW_res['convergence_history'])), FW_res['convergence_history'], 
+                marker='o', markersize=3, linestyle='-', color='blue', linewidth=1)
+
+    # 设置标题和标签
+    plt.title(title, fontsize=14, pad=20)
+    plt.xlabel('Iteration', fontsize=12)
+    plt.ylabel('Convergence Metric (log scale)', fontsize=12)
+
+    # 更简单方式：让 Matplotlib 自动处理，但关闭次要刻度
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'$10^{{{int(np.log10(x))}}}$'))
+
+    # 控制网格：只显示主刻度网格线，去掉虚线
+    ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.6)
+    ax.grid(False, which='minor')  # 关闭次要网格
+
+    # 调整布局
+    plt.tight_layout()
+
+    # 显示图像
+    plt.show()
