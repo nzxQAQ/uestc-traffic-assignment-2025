@@ -19,4 +19,7 @@ python AON.py
 python IA.py
 python FW.py
 ```
-- 也可直接运行main.py
+- 也可直接运行进行测试
+```bash
+python main.py
+```
